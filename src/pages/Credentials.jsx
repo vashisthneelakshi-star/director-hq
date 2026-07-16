@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { KeyRound, Plus, Search, X, Eye, EyeOff, Trash2, ShieldCheck, Copy, Check, Download, FileSpreadsheet, FileText, Loader2 } from "lucide-react";
 import { store } from "../lib/storage";
 import { exportCredentialsCSV, exportCredentialsPDF } from "../lib/export";
+import { Linkify } from "../lib/linkify";
 
 function AddCredentialModal({ onClose, onSave }) {
   const [form, setForm] = useState({ site: "", url: "", username: "", password: "", notes: "" });
@@ -103,7 +104,11 @@ function CredentialRow({ cred, onDelete }) {
       <div className="flex-1 min-w-0">
         <div className="font-medium text-slate-900">{cred.site}</div>
         <div className="text-sm text-slate-500 truncate">{cred.username}</div>
-        {cred.url && <div className="text-xs text-slate-400 truncate">{cred.url}</div>}
+        {cred.url && (
+          <div className="text-xs text-slate-400 truncate">
+            <Linkify text={cred.url} className="text-brand-500 hover:text-brand-600" />
+          </div>
+        )}
       </div>
       <div className="flex items-center gap-2 shrink-0">
         <span className="text-sm font-mono text-slate-600 w-28 text-right">

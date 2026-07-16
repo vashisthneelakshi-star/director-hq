@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CheckSquare, Plus, Search, X, Trash2, CalendarClock, AlertTriangle, Loader2 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { store } from "../lib/storage";
+import { Linkify } from "../lib/linkify";
 
 const STATUS_FILTERS = ["All", "To Do", "In Progress", "Done", "Overdue"];
 const PRIORITY_FILTERS = ["All", "High", "Medium", "Low"];
@@ -262,14 +263,21 @@ export default function Tasks() {
               const overdue = isOverdue(t);
               return (
                 <li key={t.id} className="p-4 flex items-start gap-3">
-                  <button
+                  <div
+                    role="button"
+                    tabIndex={0}
                     onClick={() => setEditingTask(t)}
-                    className="flex-1 min-w-0 text-left"
+                    onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setEditingTask(t)}
+                    className="flex-1 min-w-0 text-left cursor-pointer"
                   >
                     <div className={`font-medium hover:text-brand-600 ${t.status === "done" ? "text-slate-400 line-through" : "text-slate-900"}`}>
                       {t.title}
                     </div>
-                    {t.description && <div className="text-sm text-slate-500 mt-0.5 truncate">{t.description}</div>}
+                    {t.description && (
+                      <div className="text-sm text-slate-500 mt-0.5 truncate">
+                        <Linkify text={t.description} />
+                      </div>
+                    )}
                     {t.dueDate && (
                       <div className={`flex items-center gap-1 text-xs mt-1.5 ${overdue ? "text-red-600 font-medium" : "text-slate-400"}`}>
                         {overdue ? <AlertTriangle size={12} /> : <CalendarClock size={12} />}
@@ -277,7 +285,7 @@ export default function Tasks() {
                         {new Date(t.dueDate + "T00:00:00").toLocaleDateString()}
                       </div>
                     )}
-                  </button>
+                  </div>
                   <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize shrink-0 ${PRIORITY_STYLE[t.priority]}`}>
                     {t.priority}
                   </span>

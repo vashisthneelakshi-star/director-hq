@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Calendar, List, Plus, Search, SlidersHorizontal, X, Clock, MapPin, Users, Trash2, Loader2 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { store } from "../lib/storage";
+import { Linkify } from "../lib/linkify";
 
 const FILTERS = ["All", "Scheduled", "Completed", "Cancelled"];
 
@@ -264,7 +265,13 @@ export default function Meetings() {
           <ul className="divide-y divide-slate-100">
             {filtered.map((m) => (
               <li key={m.id} className="p-4 flex items-start justify-between gap-4">
-                <button onClick={() => setEditingMeeting(m)} className="min-w-0 text-left flex-1">
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setEditingMeeting(m)}
+                  onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setEditingMeeting(m)}
+                  className="min-w-0 text-left flex-1 cursor-pointer"
+                >
                   <div className="font-medium text-slate-900 hover:text-brand-600">{m.title}</div>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 mt-1.5">
                     {m.date && (
@@ -274,7 +281,7 @@ export default function Meetings() {
                     )}
                     {m.location && (
                       <span className="flex items-center gap-1">
-                        <MapPin size={12} /> {m.location}
+                        <MapPin size={12} /> <Linkify text={m.location} />
                       </span>
                     )}
                     {m.attendees && (
@@ -283,7 +290,7 @@ export default function Meetings() {
                       </span>
                     )}
                   </div>
-                </button>
+                </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <select
                     value={m.status}
