@@ -96,3 +96,15 @@ begin
 end $$;
 
 create index if not exists idx_push_subscriptions_owner on push_subscriptions(owner_id);
+
+-- TASK ASSIGNMENT (who gave the task / who it was forwarded to)
+alter table tasks add column if not exists assignment_type text not null default 'self';
+alter table tasks add column if not exists person_name text;
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'tasks_assignment_type_check') then
+    alter table tasks add constraint tasks_assignment_type_check
+      check (assignment_type in ('self', 'given_to_me', 'given_by_me'));
+  end if;
+end $$;

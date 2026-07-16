@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { CheckSquare, Plus, Search, X, Trash2, CalendarClock, AlertTriangle, Loader2 } from "lucide-react";
+import { CheckSquare, Plus, Search, X, Trash2, CalendarClock, AlertTriangle, Loader2, ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { store } from "../lib/storage";
 import { Linkify } from "../lib/linkify";
 
 const STATUS_FILTERS = ["All", "To Do", "In Progress", "Done", "Overdue"];
 const PRIORITY_FILTERS = ["All", "High", "Medium", "Low"];
+const ASSIGNMENT_FILTERS = ["All", "Self", "Given to me", "Given by me"];
+const ASSIGNMENT_MAP = { "Given to me": "given_to_me", "Given by me": "given_by_me", Self: "self" };
 
 const STATUS_MAP = { "To Do": "todo", "In Progress": "in_progress", Done: "done" };
 const STATUS_LABEL = { todo: "To Do", in_progress: "In Progress", done: "Done" };
@@ -29,6 +31,8 @@ function TaskModal({ task, onClose, onSave, onDelete }) {
     priority: task?.priority || "medium",
     status: task?.status || "todo",
     dueDate: task?.dueDate || "",
+    assignmentType: task?.assignmentType || "self",
+    personName: task?.personName || "",
   });
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
@@ -80,6 +84,27 @@ function TaskModal({ task, onClose, onSave, onDelete }) {
             <span className="text-sm font-medium text-slate-700">Deadline</span>
             <input type="date" value={form.dueDate} onChange={set("dueDate")} className="input mt-1" />
           </label>
+          <label className="block">
+            <span className="text-sm font-medium text-slate-700">Assignment</span>
+            <select value={form.assignmentType} onChange={set("assignmentType")} className="input mt-1">
+              <option value="self">Self-assigned</option>
+              <option value="given_to_me">Given to me by someone</option>
+              <option value="given_by_me">I assigned this to someone</option>
+            </select>
+          </label>
+          {form.assignmentType !== "self" && (
+            <label className="block">
+              <span className="text-sm font-medium text-slate-700">
+                {form.assignmentType === "given_to_me" ? "Assigned by (name)" : "Assigned to (name)"}
+              </span>
+              <input
+                value={form.personName}
+                onChange={set("personName")}
+                placeholder="Name"
+                className="input mt-1"
+              />
+            </label>
+          )}
           <div className="flex justify-between items-center pt-2">
             {isEdit ? (
               <button
@@ -112,6 +137,7 @@ export default function Tasks() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [statusFilter, setStatusFilter] = useState(searchParams.get("status") || "All");
   const [priorityFilter, setPriorityFilter] = useState("All");
+  const [assignmentFilter, setAssignmentFilter] = useState("All");
   const [query, setQuery] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
@@ -137,11 +163,16 @@ export default function Tasks() {
       if (statusFilter === "Overdue") matchesStatus = isOverdue(t);
       else if (statusFilter !== "All") matchesStatus = t.status === STATUS_MAP[statusFilter];
       const matchesPriority = priorityFilter === "All" || t.priority === priorityFilter.toLowerCase();
+      const matchesAssignment = assignmentFilter === "All" || t.assignmentType === ASSIGNMENT_MAP[assignmentFilter];
       const q = query.toLowerCase();
-      const matchesQuery = !q || t.title?.toLowerCase().includes(q) || t.description?.toLowerCase().includes(q);
-      return matchesStatus && matchesPriority && matchesQuery;
+      const matchesQuery =
+        !q ||
+        t.title?.toLowerCase().includes(q) ||
+        t.description?.toLowerCase().includes(q) ||
+        t.personName?.toLowerCase().includes(q);
+      return matchesStatus && matchesPriority && matchesAssignment && matchesQuery;
     });
-  }, [tasks, statusFilter, priorityFilter, query]);
+  }, [tasks, statusFilter, priorityFilter, assignmentFilter, query]);
 
   const doneCount = tasks.filter((t) => t.status === "done").length;
 
@@ -240,6 +271,22 @@ export default function Tasks() {
             </button>
           ))}
         </div>
+        <div className="w-px h-5 bg-slate-200" />
+        <div className="flex gap-1 bg-slate-100 rounded-lg p-1 flex-wrap">
+          {ASSIGNMENT_FILTERS.map((f) => (
+            <button
+              key={f}
+              onClick={() => setAssignmentFilter(f)}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1 ${
+                assignmentFilter === f ? "bg-white shadow-sm text-slate-900" : "text-slate-500"
+              }`}
+            >
+              {f === "Given to me" && <ArrowDownLeft size={13} className="text-brand-500" />}
+              {f === "Given by me" && <ArrowUpRight size={13} className="text-brand-500" />}
+              {f}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200">
@@ -283,6 +330,12 @@ export default function Tasks() {
                         {overdue ? <AlertTriangle size={12} /> : <CalendarClock size={12} />}
                         {overdue ? "Overdue — " : "Due "}
                         {new Date(t.dueDate + "T00:00:00").toLocaleDateString()}
+                      </div>
+                    )}
+                    {t.assignmentType && t.assignmentType !== "self" && t.personName && (
+                      <div className="flex items-center gap-1 text-xs mt-1.5 text-brand-600">
+                        {t.assignmentType === "given_to_me" ? <ArrowDownLeft size={12} /> : <ArrowUpRight size={12} />}
+                        {t.assignmentType === "given_to_me" ? `From ${t.personName}` : `To ${t.personName}`}
                       </div>
                     )}
                   </div>
