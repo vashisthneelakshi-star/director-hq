@@ -78,7 +78,7 @@ export function exportMeetingsPDF(meetings) {
 
 export function exportTasksCSV(tasks, ownerName = "You") {
   const headers = ["Title", "Description", "Priority", "Status", "Due Date", "Assignment Trail"];
-  const rows = tasks.map((t) => [t.title, t.description, t.priority, t.status, t.dueDate, taskTrail(t, ownerName)]);
+  const rows = tasks.map((t) => [t.title, t.description, t.priority, t.status, t.dueDate, taskTrail(t, ownerName, " -> ")]);
   const csv = [headers, ...rows].map((row) => row.map(csvEscape).join(",")).join("\n");
   downloadBlob(csv, `tasks-${dateStamp()}.csv`, "text/csv;charset=utf-8;");
 }
@@ -99,7 +99,7 @@ export function exportTasksPDF(tasks, ownerName = "You") {
       t.priority || "",
       t.status || "",
       t.dueDate || "",
-      taskTrail(t, ownerName),
+      taskTrail(t, ownerName, " -> "),
     ]),
     styles: { fontSize: 8, cellPadding: 3 },
     headStyles: { fillColor: [122, 30, 46] },
@@ -140,7 +140,7 @@ export function exportSummaryPDF({ meetings, tasks, credentials }, ownerName = "
   autoTable(doc, {
     startY: doc.lastAutoTable.finalY + 10,
     head: [["Tasks", "Priority", "Status", "Assignment Trail"]],
-    body: tasks.slice(0, 15).map((t) => [t.title || "", t.priority || "", t.status || "", taskTrail(t, ownerName)]),
+    body: tasks.slice(0, 15).map((t) => [t.title || "", t.priority || "", t.status || "", taskTrail(t, ownerName, " -> ")]),
     styles: { fontSize: 8, cellPadding: 3 },
     headStyles: { fillColor: [184, 134, 62] },
   });
