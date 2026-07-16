@@ -1,0 +1,6 @@
+{
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
+  "crons": [
+    { "path": "/api/send-daily-notifications", "schedule": "30 1 * * *" }
+  ]
+}
