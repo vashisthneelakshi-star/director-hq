@@ -1,5 +1,6 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { taskTrail } from "./taskTrail";
 
 function downloadBlob(content, filename, mime) {
   const blob = new Blob([content], { type: mime });
@@ -75,14 +76,14 @@ export function exportMeetingsPDF(meetings) {
   doc.save(`meetings-${dateStamp()}.pdf`);
 }
 
-export function exportTasksCSV(tasks) {
-  const headers = ["Title", "Description", "Priority", "Status", "Due Date"];
-  const rows = tasks.map((t) => [t.title, t.description, t.priority, t.status, t.dueDate]);
+export function exportTasksCSV(tasks, ownerName = "You") {
+  const headers = ["Title", "Description", "Priority", "Status", "Due Date", "Assignment Trail"];
+  const rows = tasks.map((t) => [t.title, t.description, t.priority, t.status, t.dueDate, taskTrail(t, ownerName)]);
   const csv = [headers, ...rows].map((row) => row.map(csvEscape).join(",")).join("\n");
   downloadBlob(csv, `tasks-${dateStamp()}.csv`, "text/csv;charset=utf-8;");
 }
 
-export function exportTasksPDF(tasks) {
+export function exportTasksPDF(tasks, ownerName = "You") {
   const doc = new jsPDF();
   doc.setFontSize(16);
   doc.text("Daily Tasks", 14, 18);
@@ -91,8 +92,15 @@ export function exportTasksPDF(tasks) {
   doc.text(`Exported ${new Date().toLocaleString()}`, 14, 24);
   autoTable(doc, {
     startY: 30,
-    head: [["Title", "Description", "Priority", "Status", "Due Date"]],
-    body: tasks.map((t) => [t.title || "", t.description || "", t.priority || "", t.status || "", t.dueDate || ""]),
+    head: [["Title", "Description", "Priority", "Status", "Due Date", "Assignment Trail"]],
+    body: tasks.map((t) => [
+      t.title || "",
+      t.description || "",
+      t.priority || "",
+      t.status || "",
+      t.dueDate || "",
+      taskTrail(t, ownerName),
+    ]),
     styles: { fontSize: 8, cellPadding: 3 },
     headStyles: { fillColor: [122, 30, 46] },
   });
@@ -106,7 +114,7 @@ export function exportNotesIndexCSV(notes) {
   downloadBlob(csv, `notes-index-${dateStamp()}.csv`, "text/csv;charset=utf-8;");
 }
 
-export function exportSummaryPDF({ meetings, tasks, credentials }) {
+export function exportSummaryPDF({ meetings, tasks, credentials }, ownerName = "You") {
   const doc = new jsPDF();
   doc.setFontSize(18);
   doc.setTextColor(122, 30, 46);
@@ -131,8 +139,8 @@ export function exportSummaryPDF({ meetings, tasks, credentials }) {
 
   autoTable(doc, {
     startY: doc.lastAutoTable.finalY + 10,
-    head: [["Tasks", "Priority", "Status"]],
-    body: tasks.slice(0, 15).map((t) => [t.title || "", t.priority || "", t.status || ""]),
+    head: [["Tasks", "Priority", "Status", "Assignment Trail"]],
+    body: tasks.slice(0, 15).map((t) => [t.title || "", t.priority || "", t.status || "", taskTrail(t, ownerName)]),
     styles: { fontSize: 8, cellPadding: 3 },
     headStyles: { fillColor: [184, 134, 62] },
   });

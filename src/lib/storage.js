@@ -17,21 +17,23 @@ function mapMeetingOut(row) {
 }
 
 function taskToDb(task) {
-  const { dueDate, assignmentType, personName, ...rest } = task;
+  const { dueDate, assignmentType, personName, givenByName, givenToName, ...rest } = task;
   const out = { ...rest };
   if (dueDate !== undefined) out.due_date = dueDate || null;
-  if (assignmentType !== undefined) {
-    out.assignment_type = assignmentType;
-    // self-assigned tasks don't carry a person name
-    out.person_name = assignmentType === "self" ? null : personName || null;
-  }
+  if (givenByName !== undefined) out.given_by_name = givenByName || null;
+  if (givenToName !== undefined) out.given_to_name = givenToName || null;
   return out;
 }
 
 function taskFromDb(row) {
   if (!row) return row;
-  const { due_date, assignment_type, person_name, ...rest } = row;
-  return { ...rest, dueDate: due_date, assignmentType: assignment_type || "self", personName: person_name || "" };
+  const { due_date, assignment_type, person_name, given_by_name, given_to_name, ...rest } = row;
+  return {
+    ...rest,
+    dueDate: due_date,
+    givenByName: given_by_name || "",
+    givenToName: given_to_name || "",
+  };
 }
 
 export const store = {

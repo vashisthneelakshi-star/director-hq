@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { CheckSquare, Plus, Search, X, Trash2, CalendarClock, AlertTriangle, Loader2, ArrowDownLeft, ArrowUpRight } from "lucide-react";
+import { CheckSquare, Plus, Search, X, Trash2, CalendarClock, AlertTriangle, Loader2, ArrowDownLeft, ArrowUpRight, ArrowRight } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { store } from "../lib/storage";
 import { Linkify } from "../lib/linkify";
+import { useAuth } from "../lib/AuthContext";
+import { taskTrail, hasTrail } from "../lib/taskTrail";
 
 const STATUS_FILTERS = ["All", "To Do", "In Progress", "Done", "Overdue"];
 const PRIORITY_FILTERS = ["All", "High", "Medium", "Low"];
 const ASSIGNMENT_FILTERS = ["All", "Self", "Given to me", "Given by me"];
-const ASSIGNMENT_MAP = { "Given to me": "given_to_me", "Given by me": "given_by_me", Self: "self" };
 
 const STATUS_MAP = { "To Do": "todo", "In Progress": "in_progress", Done: "done" };
 const STATUS_LABEL = { todo: "To Do", in_progress: "In Progress", done: "Done" };
@@ -31,8 +32,8 @@ function TaskModal({ task, onClose, onSave, onDelete }) {
     priority: task?.priority || "medium",
     status: task?.status || "todo",
     dueDate: task?.dueDate || "",
-    assignmentType: task?.assignmentType || "self",
-    personName: task?.personName || "",
+    givenByName: task?.givenByName || "",
+    givenToName: task?.givenToName || "",
   });
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
@@ -44,68 +45,81 @@ function TaskModal({ task, onClose, onSave, onDelete }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-        <div className="flex items-center justify-between mb-5">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0 border-b border-slate-100">
           <h2 className="text-lg font-semibold text-slate-900">{isEdit ? "Task Details" : "Add Task"}</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
             <X size={18} />
           </button>
         </div>
-        <form onSubmit={submit} className="space-y-4">
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">
-              Title <span className="text-red-500">*</span>
-            </span>
-            <input autoFocus value={form.title} onChange={set("title")} placeholder="Review Q3 budget" className="input mt-1" />
-          </label>
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">Description</span>
-            <textarea value={form.description} onChange={set("description")} placeholder="Additional details..." className="input mt-1 min-h-[80px]" />
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block">
-              <span className="text-sm font-medium text-slate-700">Priority</span>
-              <select value={form.priority} onChange={set("priority")} className="input mt-1">
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
-              </select>
-            </label>
-            <label className="block">
-              <span className="text-sm font-medium text-slate-700">Status</span>
-              <select value={form.status} onChange={set("status")} className="input mt-1">
-                <option value="todo">To Do</option>
-                <option value="in_progress">In Progress</option>
-                <option value="done">Done</option>
-              </select>
-            </label>
-          </div>
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">Deadline</span>
-            <input type="date" value={form.dueDate} onChange={set("dueDate")} className="input mt-1" />
-          </label>
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">Assignment</span>
-            <select value={form.assignmentType} onChange={set("assignmentType")} className="input mt-1">
-              <option value="self">Self-assigned</option>
-              <option value="given_to_me">Given to me by someone</option>
-              <option value="given_by_me">I assigned this to someone</option>
-            </select>
-          </label>
-          {form.assignmentType !== "self" && (
+        <form onSubmit={submit} className="flex flex-col flex-1 min-h-0">
+          <div className="px-6 py-4 space-y-4 overflow-y-auto flex-1">
             <label className="block">
               <span className="text-sm font-medium text-slate-700">
-                {form.assignmentType === "given_to_me" ? "Assigned by (name)" : "Assigned to (name)"}
+                Title <span className="text-red-500">*</span>
               </span>
-              <input
-                value={form.personName}
-                onChange={set("personName")}
-                placeholder="Name"
-                className="input mt-1"
-              />
+              <input autoFocus value={form.title} onChange={set("title")} placeholder="Review Q3 budget" className="input mt-1" />
             </label>
-          )}
-          <div className="flex justify-between items-center pt-2">
+            <label className="block">
+              <span className="text-sm font-medium text-slate-700">Description</span>
+              <textarea value={form.description} onChange={set("description")} placeholder="Additional details..." className="input mt-1 min-h-[80px]" />
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="text-sm font-medium text-slate-700">Priority</span>
+                <select value={form.priority} onChange={set("priority")} className="input mt-1">
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-sm font-medium text-slate-700">Status</span>
+                <select value={form.status} onChange={set("status")} className="input mt-1">
+                  <option value="todo">To Do</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="done">Done</option>
+                </select>
+              </label>
+            </div>
+            <label className="block">
+              <span className="text-sm font-medium text-slate-700">Deadline</span>
+              <input type="date" value={form.dueDate} onChange={set("dueDate")} className="input mt-1" />
+            </label>
+
+            <div className="border-t border-slate-100 pt-4 space-y-3">
+              <p className="text-sm font-medium text-slate-700">Assignment trail</p>
+              <p className="text-xs text-slate-400 -mt-2">Fill in either side, or both, if the task passed through multiple hands.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="text-xs font-medium text-slate-500">Given to you by</span>
+                  <input
+                    value={form.givenByName}
+                    onChange={set("givenByName")}
+                    placeholder="Leave blank if self-started"
+                    className="input mt-1"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-medium text-slate-500">Forwarded/assigned to</span>
+                  <input
+                    value={form.givenToName}
+                    onChange={set("givenToName")}
+                    placeholder="Leave blank if not forwarded"
+                    className="input mt-1"
+                  />
+                </label>
+              </div>
+              {(form.givenByName || form.givenToName) && (
+                <div className="text-xs bg-brand-50 text-brand-700 rounded-lg px-3 py-2 flex items-center gap-1.5 flex-wrap">
+                  <ArrowRight size={12} className="shrink-0" />
+                  {taskTrail({ givenByName: form.givenByName, givenToName: form.givenToName })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex justify-between items-center px-6 py-4 border-t border-slate-100 shrink-0">
             {isEdit ? (
               <button
                 type="button"
@@ -133,6 +147,8 @@ function TaskModal({ task, onClose, onSave, onDelete }) {
 }
 
 export default function Tasks() {
+  const { user } = useAuth();
+  const ownerName = user?.user_metadata?.full_name || "You";
   const [tasks, setTasks] = useState([]);
   const [searchParams, setSearchParams] = useSearchParams();
   const [statusFilter, setStatusFilter] = useState(searchParams.get("status") || "All");
@@ -163,13 +179,17 @@ export default function Tasks() {
       if (statusFilter === "Overdue") matchesStatus = isOverdue(t);
       else if (statusFilter !== "All") matchesStatus = t.status === STATUS_MAP[statusFilter];
       const matchesPriority = priorityFilter === "All" || t.priority === priorityFilter.toLowerCase();
-      const matchesAssignment = assignmentFilter === "All" || t.assignmentType === ASSIGNMENT_MAP[assignmentFilter];
+      let matchesAssignment = true;
+      if (assignmentFilter === "Self") matchesAssignment = !t.givenByName && !t.givenToName;
+      else if (assignmentFilter === "Given to me") matchesAssignment = Boolean(t.givenByName);
+      else if (assignmentFilter === "Given by me") matchesAssignment = Boolean(t.givenToName);
       const q = query.toLowerCase();
       const matchesQuery =
         !q ||
         t.title?.toLowerCase().includes(q) ||
         t.description?.toLowerCase().includes(q) ||
-        t.personName?.toLowerCase().includes(q);
+        t.givenByName?.toLowerCase().includes(q) ||
+        t.givenToName?.toLowerCase().includes(q);
       return matchesStatus && matchesPriority && matchesAssignment && matchesQuery;
     });
   }, [tasks, statusFilter, priorityFilter, assignmentFilter, query]);
@@ -332,10 +352,10 @@ export default function Tasks() {
                         {new Date(t.dueDate + "T00:00:00").toLocaleDateString()}
                       </div>
                     )}
-                    {t.assignmentType && t.assignmentType !== "self" && t.personName && (
-                      <div className="flex items-center gap-1 text-xs mt-1.5 text-brand-600">
-                        {t.assignmentType === "given_to_me" ? <ArrowDownLeft size={12} /> : <ArrowUpRight size={12} />}
-                        {t.assignmentType === "given_to_me" ? `From ${t.personName}` : `To ${t.personName}`}
+                    {hasTrail(t) && (
+                      <div className="flex items-center gap-1 text-xs mt-1.5 text-brand-600 flex-wrap">
+                        <ArrowRight size={12} className="shrink-0" />
+                        {taskTrail(t, ownerName)}
                       </div>
                     )}
                   </div>

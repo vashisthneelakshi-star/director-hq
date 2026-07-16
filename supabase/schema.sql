@@ -108,3 +108,9 @@ begin
       check (assignment_type in ('self', 'given_to_me', 'given_by_me'));
   end if;
 end $$;
+
+-- TASK ASSIGNMENT TRAIL (supports full hand-off chain, e.g. Nihar -> You -> Abhishek)
+-- given_by_name: who assigned this task to the director (blank = director started it themselves)
+-- given_to_name: who the director forwarded this task to (blank = not forwarded)
+alter table tasks add column if not exists given_by_name text;
+alter table tasks add column if not exists given_to_name text;

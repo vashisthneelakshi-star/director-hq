@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Download, Calendar, CheckSquare, KeyRound, FileText, BarChart3, Loader2 } from "lucide-react";
 import { store } from "../lib/storage";
+import { useAuth } from "../lib/AuthContext";
 import {
   exportMeetingsCSV,
   exportMeetingsPDF,
@@ -54,6 +55,8 @@ function ReportCard({ icon: Icon, tint, title, description, count, countLabel, o
 }
 
 export default function Reports() {
+  const { user } = useAuth();
+  const ownerName = user?.user_metadata?.full_name || "You";
   const [meetings, setMeetings] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [credentials, setCredentials] = useState([]);
@@ -105,7 +108,7 @@ export default function Reports() {
           </div>
         </div>
         <button
-          onClick={() => exportSummaryPDF({ meetings, tasks, credentials })}
+          onClick={() => exportSummaryPDF({ meetings, tasks, credentials }, ownerName)}
           className="flex items-center justify-center gap-2 bg-white text-maroon-600 font-medium text-sm px-4 py-2.5 rounded-lg shrink-0 hover:bg-gold-50"
         >
           <Download size={16} /> Download Summary PDF
@@ -130,8 +133,8 @@ export default function Reports() {
           description="Export your task list with priorities, statuses, and due dates."
           count={tasks.length}
           countLabel="tasks"
-          onCSV={() => exportTasksCSV(tasks)}
-          onPDF={() => exportTasksPDF(tasks)}
+          onCSV={() => exportTasksCSV(tasks, ownerName)}
+          onPDF={() => exportTasksPDF(tasks, ownerName)}
         />
         <ReportCard
           icon={KeyRound}
