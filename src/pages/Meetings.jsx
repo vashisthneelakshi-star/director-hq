@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { Calendar, List, Plus, Search, SlidersHorizontal, X, Clock, MapPin, Users, Trash2, Loader2, AlertTriangle } from "lucide-react";
+import { Calendar, List, Plus, Search, SlidersHorizontal, X, Clock, MapPin, Users, Trash2, Loader2, AlertTriangle, UserRound } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { store } from "../lib/storage";
 import { Linkify } from "../lib/linkify";
+import { useAuth } from "../lib/AuthContext";
+import { isAdminEmail } from "../lib/isAdmin";
+import { useDirectors } from "../lib/useDirectors";
 
 const FILTERS = ["All", "Scheduled", "Needs Update", "Completed", "Cancelled"];
 
@@ -125,6 +128,9 @@ function Field({ label, required, children }) {
 }
 
 export default function Meetings() {
+  const { user } = useAuth();
+  const admin = isAdminEmail(user?.email);
+  const { nameFor } = useDirectors(admin);
   const [meetings, setMeetings] = useState([]);
   const [view, setView] = useState("list");
   const [searchParams, setSearchParams] = useSearchParams();
@@ -303,6 +309,11 @@ export default function Meetings() {
                     {m.attendees && (
                       <span className="flex items-center gap-1">
                         <Users size={12} /> {m.attendees}
+                      </span>
+                    )}
+                    {admin && nameFor(m.owner_id) && (
+                      <span className="flex items-center gap-1 text-brand-600 font-medium">
+                        <UserRound size={12} /> {nameFor(m.owner_id)}
                       </span>
                     )}
                   </div>

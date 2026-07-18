@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { KeyRound, Plus, Search, X, Eye, EyeOff, Trash2, ShieldCheck, Copy, Check, Download, FileSpreadsheet, FileText, Loader2 } from "lucide-react";
+import { KeyRound, Plus, Search, X, Eye, EyeOff, Trash2, ShieldCheck, Copy, Check, Download, FileSpreadsheet, FileText, Loader2, UserRound } from "lucide-react";
 import { store } from "../lib/storage";
 import { exportCredentialsCSV, exportCredentialsPDF } from "../lib/export";
 import { Linkify } from "../lib/linkify";
+import { useAuth } from "../lib/AuthContext";
+import { isAdminEmail } from "../lib/isAdmin";
+import { useDirectors } from "../lib/useDirectors";
 
 function AddCredentialModal({ onClose, onSave }) {
   const [form, setForm] = useState({ site: "", url: "", username: "", password: "", notes: "" });
@@ -82,7 +85,7 @@ function AddCredentialModal({ onClose, onSave }) {
   );
 }
 
-function CredentialRow({ cred, onDelete }) {
+function CredentialRow({ cred, onDelete, ownerName }) {
   const [reveal, setReveal] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -107,6 +110,11 @@ function CredentialRow({ cred, onDelete }) {
         {cred.url && (
           <div className="text-xs text-slate-400 truncate">
             <Linkify text={cred.url} className="text-brand-500 hover:text-brand-600" />
+          </div>
+        )}
+        {ownerName && (
+          <div className="flex items-center gap-1 text-xs text-slate-400 mt-0.5">
+            <UserRound size={11} /> {ownerName}
           </div>
         )}
       </div>
@@ -179,6 +187,9 @@ function DownloadMenu({ credentials }) {
 }
 
 export default function Credentials() {
+  const { user } = useAuth();
+  const admin = isAdminEmail(user?.email);
+  const { nameFor } = useDirectors(admin);
   const [credentials, setCredentials] = useState([]);
   const [query, setQuery] = useState("");
   const [showModal, setShowModal] = useState(false);
@@ -268,7 +279,7 @@ export default function Credentials() {
         ) : (
           <ul className="divide-y divide-slate-100">
             {filtered.map((c) => (
-              <CredentialRow key={c.id} cred={c} onDelete={handleDelete} />
+              <CredentialRow key={c.id} cred={c} onDelete={handleDelete} ownerName={admin ? nameFor(c.owner_id) : ""} />
             ))}
           </ul>
         )}

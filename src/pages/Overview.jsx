@@ -13,10 +13,13 @@ import {
   CalendarX,
   ChevronRight,
   Loader2,
+  Users,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { store } from "../lib/storage";
 import { useAuth } from "../lib/AuthContext";
+import { isAdminEmail } from "../lib/isAdmin";
+import { useDirectors } from "../lib/useDirectors";
 import NotificationCard from "../components/NotificationCard";
 
 function greeting() {
@@ -70,6 +73,8 @@ function MiniStat({ icon: Icon, value, label, tint, onClick }) {
 
 export default function Overview() {
   const { user } = useAuth();
+  const admin = isAdminEmail(user?.email);
+  const { directors } = useDirectors(admin);
   const [meetings, setMeetings] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [credentials, setCredentials] = useState([]);
@@ -139,6 +144,14 @@ export default function Overview() {
       </div>
       <div className="masthead-rule mb-2" />
       <p className="text-slate-500 mb-6 text-sm">{dateStr}</p>
+
+      {admin && (
+        <div className="flex items-center gap-2 text-sm text-maroon-700 bg-maroon-50 border border-maroon-200 rounded-lg px-3 py-2 mb-6">
+          <Users size={15} className="shrink-0" />
+          Admin view — showing combined meetings, tasks and credentials across all
+          {directors.length ? ` ${directors.length}` : ""} directors, not just your own.
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard

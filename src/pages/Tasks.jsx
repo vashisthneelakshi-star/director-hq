@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { CheckSquare, Plus, Search, X, Trash2, CalendarClock, AlertTriangle, Loader2, ArrowDownLeft, ArrowUpRight, ArrowRight } from "lucide-react";
+import { CheckSquare, Plus, Search, X, Trash2, CalendarClock, AlertTriangle, Loader2, ArrowDownLeft, ArrowUpRight, ArrowRight, UserRound } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { store } from "../lib/storage";
 import { Linkify } from "../lib/linkify";
 import { useAuth } from "../lib/AuthContext";
 import { taskTrail, hasTrail } from "../lib/taskTrail";
+import { isAdminEmail } from "../lib/isAdmin";
+import { useDirectors } from "../lib/useDirectors";
 
 const STATUS_FILTERS = ["All", "To Do", "In Progress", "Done", "Overdue"];
 const PRIORITY_FILTERS = ["All", "High", "Medium", "Low"];
@@ -149,6 +151,8 @@ function TaskModal({ task, onClose, onSave, onDelete }) {
 export default function Tasks() {
   const { user } = useAuth();
   const ownerName = user?.user_metadata?.full_name || "You";
+  const admin = isAdminEmail(user?.email);
+  const { nameFor } = useDirectors(admin);
   const [tasks, setTasks] = useState([]);
   const [searchParams, setSearchParams] = useSearchParams();
   const [statusFilter, setStatusFilter] = useState(searchParams.get("status") || "All");
@@ -356,6 +360,11 @@ export default function Tasks() {
                       <div className="flex items-center gap-1 text-xs mt-1.5 text-brand-600 flex-wrap">
                         <ArrowRight size={12} className="shrink-0" />
                         {taskTrail(t, ownerName)}
+                      </div>
+                    )}
+                    {admin && nameFor(t.owner_id) && (
+                      <div className="flex items-center gap-1 text-xs mt-1.5 text-slate-500">
+                        <UserRound size={12} /> {nameFor(t.owner_id)}
                       </div>
                     )}
                   </div>
