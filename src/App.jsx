@@ -9,6 +9,7 @@ import Credentials from "./pages/Credentials";
 import Analytics from "./pages/Analytics";
 import Notes from "./pages/Notes";
 import Reports from "./pages/Reports";
+import Admin from "./pages/Admin";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -45,6 +46,7 @@ export default function App() {
                     <Route path="/analytics" element={<Analytics />} />
                     <Route path="/notes" element={<Notes />} />
                     <Route path="/reports" element={<Reports />} />
+                    <Route path="/admin" element={<Admin />} />
                   </Routes>
                 </AppShell>
               </ProtectedRoute>

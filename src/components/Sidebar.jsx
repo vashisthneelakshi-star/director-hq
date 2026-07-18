@@ -12,9 +12,11 @@ import {
   LogOut,
   Menu,
   X,
+  ShieldCheck,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
+import { isAdminEmail } from "../lib/isAdmin";
 
 const NAV_ITEMS = [
   { to: "/", label: "Overview", icon: LayoutGrid, end: true },
@@ -30,6 +32,9 @@ function SidebarContent({ onNavigate }) {
   const { user, signOut } = useAuth();
   const displayName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Director";
   const initial = displayName.trim().charAt(0).toUpperCase() || "D";
+  const navItems = isAdminEmail(user?.email)
+    ? [...NAV_ITEMS, { to: "/admin", label: "Admin", icon: ShieldCheck }]
+    : NAV_ITEMS;
 
   return (
     <>
@@ -52,7 +57,7 @@ function SidebarContent({ onNavigate }) {
       </div>
 
       <nav className="flex-1 px-3 mt-2 space-y-1 overflow-y-auto">
-        {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
+        {navItems.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
             to={to}
