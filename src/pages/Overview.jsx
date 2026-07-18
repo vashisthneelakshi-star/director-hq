@@ -105,6 +105,9 @@ export default function Overview() {
   );
   const completedMeetings = meetings.filter((m) => m.status === "completed");
   const cancelledMeetings = meetings.filter((m) => m.status === "cancelled");
+  const staleMeetings = meetings.filter(
+    (m) => m.status === "scheduled" && m.date && new Date(m.date + "T23:59:59") < new Date()
+  );
 
   const upcoming = [...upcomingMeetings].sort((a, b) => new Date(a.date) - new Date(b.date)).slice(0, 4);
 
@@ -207,6 +210,13 @@ export default function Overview() {
             <Calendar size={17} /> Meeting Breakdown
           </div>
           <div className="space-y-2">
+            <MiniStat
+              icon={AlertTriangle}
+              value={staleMeetings.length}
+              label="Needs update — date passed, still Scheduled"
+              tint="bg-amber-100 text-amber-700"
+              onClick={() => navigate("/meetings?status=Needs Update")}
+            />
             <MiniStat
               icon={Calendar}
               value={upcomingMeetings.length}

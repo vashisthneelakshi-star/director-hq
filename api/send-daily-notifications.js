@@ -28,27 +28,38 @@ export default async function handler(req, res) {
 
   const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 
-  const [{ data: meetings, error: meetingsErr }, { data: tasks, error: tasksErr }, { data: subs, error: subsErr }] =
-    await Promise.all([
-      supabase.from("meetings").select("owner_id, title").eq("date", today).neq("status", "cancelled"),
-      supabase.from("tasks").select("owner_id, title").eq("due_date", today).neq("status", "done"),
-      supabase.from("push_subscriptions").select("owner_id, subscription, endpoint"),
-    ]);
+  const [
+    { data: meetings, error: meetingsErr },
+    { data: tasks, error: tasksErr },
+    { data: staleMeetings, error: staleMeetingsErr },
+    { data: overdueTasks, error: overdueTasksErr },
+    { data: subs, error: subsErr },
+  ] = await Promise.all([
+    supabase.from("meetings").select("owner_id, title").eq("date", today).neq("status", "cancelled"),
+    supabase.from("tasks").select("owner_id, title").eq("due_date", today).neq("status", "done"),
+    // scheduled meetings whose date has already passed — director forgot to mark them Completed/Cancelled
+    supabase.from("meetings").select("owner_id, title").eq("status", "scheduled").lt("date", today),
+    // tasks whose deadline has passed and are still not Done
+    supabase.from("tasks").select("owner_id, title").neq("status", "done").lt("due_date", today),
+    supabase.from("push_subscriptions").select("owner_id, subscription, endpoint"),
+  ]);
 
-  if (meetingsErr || tasksErr || subsErr) {
-    return res.status(500).json({ error: (meetingsErr || tasksErr || subsErr).message });
+  if (meetingsErr || tasksErr || staleMeetingsErr || overdueTasksErr || subsErr) {
+    return res
+      .status(500)
+      .json({ error: (meetingsErr || tasksErr || staleMeetingsErr || overdueTasksErr || subsErr).message });
   }
 
-  // Build a per-owner summary of what's due today
+  // Build a per-owner summary of what's due today, plus what's stale/overdue and needs updating
   const byOwner = new Map();
-  for (const m of meetings || []) {
-    if (!byOwner.has(m.owner_id)) byOwner.set(m.owner_id, { meetings: 0, tasks: 0 });
-    byOwner.get(m.owner_id).meetings += 1;
-  }
-  for (const t of tasks || []) {
-    if (!byOwner.has(t.owner_id)) byOwner.set(t.owner_id, { meetings: 0, tasks: 0 });
-    byOwner.get(t.owner_id).tasks += 1;
-  }
+  const ensure = (id) => {
+    if (!byOwner.has(id)) byOwner.set(id, { meetings: 0, tasks: 0, staleMeetings: 0, overdueTasks: 0 });
+    return byOwner.get(id);
+  };
+  for (const m of meetings || []) ensure(m.owner_id).meetings += 1;
+  for (const t of tasks || []) ensure(t.owner_id).tasks += 1;
+  for (const m of staleMeetings || []) ensure(m.owner_id).staleMeetings += 1;
+  for (const t of overdueTasks || []) ensure(t.owner_id).overdueTasks += 1;
 
   const results = [];
   const staleEndpoints = [];
@@ -57,14 +68,24 @@ export default async function handler(req, res) {
     const ownerSubs = (subs || []).filter((s) => s.owner_id === ownerId);
     if (ownerSubs.length === 0) continue;
 
-    const parts = [];
-    if (counts.meetings > 0) parts.push(`${counts.meetings} meeting${counts.meetings > 1 ? "s" : ""}`);
-    if (counts.tasks > 0) parts.push(`${counts.tasks} task${counts.tasks > 1 ? "s" : ""} due`);
-    const body = `You have ${parts.join(" and ")} today.`;
+    const todayParts = [];
+    if (counts.meetings > 0) todayParts.push(`${counts.meetings} meeting${counts.meetings > 1 ? "s" : ""}`);
+    if (counts.tasks > 0) todayParts.push(`${counts.tasks} task${counts.tasks > 1 ? "s" : ""} due`);
+
+    const attentionParts = [];
+    if (counts.staleMeetings > 0)
+      attentionParts.push(`${counts.staleMeetings} past meeting${counts.staleMeetings > 1 ? "s" : ""} not marked`);
+    if (counts.overdueTasks > 0)
+      attentionParts.push(`${counts.overdueTasks} overdue task${counts.overdueTasks > 1 ? "s" : ""}`);
+
+    const bodyLines = [];
+    if (todayParts.length > 0) bodyLines.push(`Today: ${todayParts.join(" and ")}.`);
+    if (attentionParts.length > 0) bodyLines.push(`Needs update: ${attentionParts.join(" and ")}.`);
+    if (bodyLines.length === 0) continue; // nothing to notify this director about
 
     const payload = JSON.stringify({
       title: "Director HQ — Today's Agenda",
-      body,
+      body: bodyLines.join(" "),
       url: "/",
     });
 

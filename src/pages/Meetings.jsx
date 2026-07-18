@@ -1,10 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import { Calendar, List, Plus, Search, SlidersHorizontal, X, Clock, MapPin, Users, Trash2, Loader2 } from "lucide-react";
+import { Calendar, List, Plus, Search, SlidersHorizontal, X, Clock, MapPin, Users, Trash2, Loader2, AlertTriangle } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { store } from "../lib/storage";
 import { Linkify } from "../lib/linkify";
 
-const FILTERS = ["All", "Scheduled", "Completed", "Cancelled"];
+const FILTERS = ["All", "Scheduled", "Needs Update", "Completed", "Cancelled"];
+
+// A meeting whose date has passed but is still marked "Scheduled" — the
+// director never came back to mark it Completed or Cancelled.
+function isStale(meeting) {
+  if (meeting.status !== "scheduled" || !meeting.date) return false;
+  return new Date(meeting.date + "T23:59:59") < new Date();
+}
 
 function EmptyState({ onSchedule }) {
   return (
@@ -142,7 +149,9 @@ export default function Meetings() {
 
   const filtered = useMemo(() => {
     return meetings.filter((m) => {
-      const matchesFilter = filter === "All" || m.status === filter.toLowerCase();
+      const matchesFilter =
+        filter === "All" ||
+        (filter === "Needs Update" ? isStale(m) : m.status === filter.toLowerCase());
       const q = query.toLowerCase();
       const matchesQuery =
         !q ||
@@ -272,7 +281,14 @@ export default function Meetings() {
                   onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setEditingMeeting(m)}
                   className="min-w-0 text-left flex-1 cursor-pointer"
                 >
-                  <div className="font-medium text-slate-900 hover:text-brand-600">{m.title}</div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="font-medium text-slate-900 hover:text-brand-600">{m.title}</div>
+                    {isStale(m) && (
+                      <span className="flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+                        <AlertTriangle size={10} /> Needs update
+                      </span>
+                    )}
+                  </div>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 mt-1.5">
                     {m.date && (
                       <span className="flex items-center gap-1">
