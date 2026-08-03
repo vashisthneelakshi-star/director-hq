@@ -1,11 +1,28 @@
 import { useEffect, useMemo, useState } from "react";
-import { Calendar, List, Plus, Search, SlidersHorizontal, X, Clock, MapPin, Users, Trash2, Loader2, AlertTriangle, UserRound } from "lucide-react";
+import {
+  Calendar,
+  List,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  X,
+  Clock,
+  MapPin,
+  Users,
+  Trash2,
+  Loader2,
+  AlertTriangle,
+  UserRound,
+  ClipboardList,
+  Mail,
+} from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { store } from "../lib/storage";
 import { Linkify } from "../lib/linkify";
 import { useAuth } from "../lib/AuthContext";
 import { isAdminEmail } from "../lib/isAdmin";
 import { useDirectors } from "../lib/useDirectors";
+import { sendMeetingInviteEmail, sendFollowupReminderEmail } from "../lib/mail";
 
 const FILTERS = ["All", "Scheduled", "Needs Update", "Completed", "Cancelled"];
 
@@ -34,7 +51,7 @@ function EmptyState({ onSchedule }) {
   );
 }
 
-function MeetingModal({ meeting, onClose, onSave, onDelete }) {
+function MeetingModal({ meeting, onClose, onSave, onDelete, onOpenMinutes }) {
   const isEdit = Boolean(meeting?.id);
   const [form, setForm] = useState({
     title: meeting?.title || "",
@@ -42,8 +59,12 @@ function MeetingModal({ meeting, onClose, onSave, onDelete }) {
     time: meeting?.time || "",
     location: meeting?.location || "",
     attendees: meeting?.attendees || "",
+    agenda: meeting?.agenda || "",
     status: meeting?.status || "scheduled",
   });
+  const [inviteTo, setInviteTo] = useState("");
+  const [sendingInvite, setSendingInvite] = useState(false);
+  const [inviteMsg, setInviteMsg] = useState("");
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
@@ -53,9 +74,30 @@ function MeetingModal({ meeting, onClose, onSave, onDelete }) {
     onSave(form);
   };
 
+  const sendInvite = async () => {
+    if (!inviteTo.trim()) {
+      setInviteMsg("Pehle email address daalo");
+      return;
+    }
+    if (!form.title.trim() || !form.date) {
+      setInviteMsg("Title aur date bharo pehle");
+      return;
+    }
+    setSendingInvite(true);
+    setInviteMsg("");
+    try {
+      await sendMeetingInviteEmail({ to: inviteTo, form });
+      setInviteMsg("Invite bhej diya gaya ✓");
+    } catch (err) {
+      setInviteMsg("Error: " + err.message);
+    } finally {
+      setSendingInvite(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 max-h-[92vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-lg font-semibold text-slate-900">{isEdit ? "Meeting Details" : "Schedule Meeting"}</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
@@ -80,6 +122,15 @@ function MeetingModal({ meeting, onClose, onSave, onDelete }) {
           <Field label="Attendees">
             <input value={form.attendees} onChange={set("attendees")} placeholder="Comma separated names" className="input" />
           </Field>
+          <Field label="Agenda">
+            <textarea
+              rows={4}
+              value={form.agenda}
+              onChange={set("agenda")}
+              placeholder={"Ek line me ek agenda point likho\ne.g.\nBudget review\nNew hires update"}
+              className="input"
+            />
+          </Field>
           {isEdit && (
             <Field label="Status">
               <select value={form.status} onChange={set("status")} className="input">
@@ -89,6 +140,40 @@ function MeetingModal({ meeting, onClose, onSave, onDelete }) {
               </select>
             </Field>
           )}
+
+          <div className="border border-slate-200 rounded-lg p-3 bg-slate-50">
+            <div className="text-sm font-medium text-slate-700 mb-2 flex items-center gap-1.5">
+              <Mail size={14} /> Send invite by email (agenda included)
+            </div>
+            <div className="flex gap-2">
+              <input
+                value={inviteTo}
+                onChange={(e) => setInviteTo(e.target.value)}
+                placeholder="email1@company.com, email2@company.com"
+                className="input flex-1"
+              />
+              <button
+                type="button"
+                onClick={sendInvite}
+                disabled={sendingInvite}
+                className="px-3 py-2 text-sm font-medium rounded-lg bg-slate-800 text-white hover:bg-slate-900 whitespace-nowrap disabled:opacity-60"
+              >
+                {sendingInvite ? "Sending..." : "Send"}
+              </button>
+            </div>
+            {inviteMsg && <p className="text-xs mt-1.5 text-slate-600">{inviteMsg}</p>}
+          </div>
+
+          {isEdit && (
+            <button
+              type="button"
+              onClick={() => onOpenMinutes(meeting)}
+              className="w-full flex items-center justify-center gap-1.5 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <ClipboardList size={15} /> Minutes of Meeting
+            </button>
+          )}
+
           <div className="flex justify-between items-center pt-2">
             {isEdit ? (
               <button
@@ -116,6 +201,189 @@ function MeetingModal({ meeting, onClose, onSave, onDelete }) {
   );
 }
 
+function emptyRow(sNo) {
+  return { sNo, topic: "", assignTo: "", assignToEmail: "", dateOfCompletion: "", followupRemark: "" };
+}
+
+function MinutesModal({ meeting, onClose }) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [sendingIdx, setSendingIdx] = useState(null);
+  const [rowMsg, setRowMsg] = useState({});
+  const [saveMsg, setSaveMsg] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      const items = await store.getMomItems(meeting.id);
+      setRows(
+        items && items.length
+          ? items.map((it, i) => ({
+              id: it.id,
+              sNo: i + 1,
+              topic: it.topic || "",
+              assignTo: it.assign_to || "",
+              assignToEmail: it.assign_to_email || "",
+              dateOfCompletion: it.date_of_completion || "",
+              followupRemark: it.followup_remark || "",
+            }))
+          : [emptyRow(1)]
+      );
+      setLoading(false);
+    })();
+  }, [meeting.id]);
+
+  const updateRow = (idx, key, value) => {
+    setRows((r) => r.map((row, i) => (i === idx ? { ...row, [key]: value } : row)));
+  };
+
+  const addRow = () => setRows((r) => [...r, emptyRow(r.length + 1)]);
+
+  const removeRow = (idx) => setRows((r) => r.filter((_, i) => i !== idx).map((row, i) => ({ ...row, sNo: i + 1 })));
+
+  const save = async () => {
+    setSaving(true);
+    setSaveMsg("");
+    try {
+      const cleaned = rows.filter((r) => r.topic.trim() || r.assignTo.trim());
+      await store.saveMomItems(meeting.id, cleaned);
+      setSaveMsg("Minutes save ho gaye ✓");
+    } catch (err) {
+      setSaveMsg("Error: " + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const sendReminder = async (row, idx) => {
+    if (!row.assignToEmail.trim()) {
+      setRowMsg((m) => ({ ...m, [idx]: "Email daalo pehle" }));
+      return;
+    }
+    setSendingIdx(idx);
+    setRowMsg((m) => ({ ...m, [idx]: "" }));
+    try {
+      await sendFollowupReminderEmail({ meetingTitle: meeting.title, row });
+      setRowMsg((m) => ({ ...m, [idx]: "Reminder bhej diya ✓" }));
+    } catch (err) {
+      setRowMsg((m) => ({ ...m, [idx]: "Error: " + err.message }));
+    } finally {
+      setSendingIdx(null);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-6xl max-h-[92vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">Minutes of Meeting</h2>
+            <p className="text-sm text-slate-500">{meeting.title}</p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-auto px-6 py-4">
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="animate-spin text-maroon-500" size={22} />
+            </div>
+          ) : (
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="text-left text-slate-500 border-b border-slate-200">
+                  <th className="py-2 pr-2 w-10">S.No</th>
+                  <th className="py-2 pr-2 w-1/4">Topic</th>
+                  <th className="py-2 pr-2 w-32">Assign To</th>
+                  <th className="py-2 pr-2 w-40">Email (for reminder)</th>
+                  <th className="py-2 pr-2 w-32">Date of Completion</th>
+                  <th className="py-2 pr-2">Follow-up Remark</th>
+                  <th className="py-2 pr-2 w-28"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, idx) => (
+                  <tr key={row.id || idx} className="border-b border-slate-100 align-top">
+                    <td className="py-2 pr-2 text-slate-500 pt-3">{row.sNo}</td>
+                    <td className="py-2 pr-2">
+                      <textarea rows={2} value={row.topic} onChange={(e) => updateRow(idx, "topic", e.target.value)} className="input w-full" />
+                    </td>
+                    <td className="py-2 pr-2">
+                      <input value={row.assignTo} onChange={(e) => updateRow(idx, "assignTo", e.target.value)} className="input w-full" />
+                    </td>
+                    <td className="py-2 pr-2">
+                      <input
+                        type="email"
+                        value={row.assignToEmail}
+                        onChange={(e) => updateRow(idx, "assignToEmail", e.target.value)}
+                        placeholder="name@company.com"
+                        className="input w-full"
+                      />
+                    </td>
+                    <td className="py-2 pr-2">
+                      <input
+                        type="date"
+                        value={row.dateOfCompletion}
+                        onChange={(e) => updateRow(idx, "dateOfCompletion", e.target.value)}
+                        className="input w-full"
+                      />
+                    </td>
+                    <td className="py-2 pr-2">
+                      <textarea
+                        rows={2}
+                        value={row.followupRemark}
+                        onChange={(e) => updateRow(idx, "followupRemark", e.target.value)}
+                        className="input w-full"
+                      />
+                    </td>
+                    <td className="py-2 pr-2">
+                      <div className="flex flex-col gap-1">
+                        <button
+                          type="button"
+                          onClick={() => sendReminder(row, idx)}
+                          disabled={sendingIdx === idx}
+                          className="text-xs text-brand-600 hover:underline text-left disabled:opacity-60"
+                        >
+                          {sendingIdx === idx ? "Sending..." : "Send reminder"}
+                        </button>
+                        <button type="button" onClick={() => removeRow(idx)} className="text-xs text-red-500 hover:underline text-left">
+                          Remove row
+                        </button>
+                        {rowMsg[idx] && <span className="text-[11px] text-slate-500">{rowMsg[idx]}</span>}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <button type="button" onClick={addRow} className="mt-4 text-sm font-medium text-brand-600 hover:underline flex items-center gap-1">
+            <Plus size={14} /> Add row
+          </button>
+          <p className="text-xs text-slate-400 mt-4">
+            Email daalne par us row ke liye "Send reminder" se turant mail ja sakti hai, aur agar Date of Completion aaj ya nikal chuki hai to system
+            khud-ba-khud bhi ek reminder bhej dega.
+          </p>
+        </div>
+
+        <div className="flex items-center justify-between gap-2 px-6 py-4 border-t border-slate-100 shrink-0">
+          <span className="text-xs text-slate-500">{saveMsg}</span>
+          <div className="flex gap-2">
+            <button onClick={onClose} className="px-4 py-2 text-sm font-medium rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50">
+              Close
+            </button>
+            <button onClick={save} disabled={saving} className="px-4 py-2 text-sm font-medium rounded-lg bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60">
+              {saving ? "Saving..." : "Save Minutes"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Field({ label, required, children }) {
   return (
     <label className="block">
@@ -138,6 +406,7 @@ export default function Meetings() {
   const [query, setQuery] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingMeeting, setEditingMeeting] = useState(null);
+  const [minutesMeeting, setMinutesMeeting] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -192,6 +461,11 @@ export default function Meetings() {
       searchParams.delete("id");
       setSearchParams(searchParams, { replace: true });
     }
+  };
+
+  const openMinutesFromModal = (meeting) => {
+    setEditingMeeting(null);
+    setMinutesMeeting(meeting);
   };
 
   const setStatus = async (id, status) => {
@@ -319,6 +593,13 @@ export default function Meetings() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => setMinutesMeeting(m)}
+                    title="Minutes of Meeting"
+                    className="text-slate-400 hover:text-brand-600"
+                  >
+                    <ClipboardList size={16} />
+                  </button>
                   <select
                     value={m.status}
                     onChange={(e) => setStatus(m.id, e.target.value)}
@@ -338,10 +619,17 @@ export default function Meetings() {
         )}
       </div>
 
-      {showAddModal && <MeetingModal onClose={() => setShowAddModal(false)} onSave={handleAdd} />}
+      {showAddModal && <MeetingModal onClose={() => setShowAddModal(false)} onSave={handleAdd} onOpenMinutes={openMinutesFromModal} />}
       {editingMeeting && (
-        <MeetingModal meeting={editingMeeting} onClose={closeEdit} onSave={handleEditSave} onDelete={handleDelete} />
+        <MeetingModal
+          meeting={editingMeeting}
+          onClose={closeEdit}
+          onSave={handleEditSave}
+          onDelete={handleDelete}
+          onOpenMinutes={openMinutesFromModal}
+        />
       )}
+      {minutesMeeting && <MinutesModal meeting={minutesMeeting} onClose={() => setMinutesMeeting(null)} />}
     </div>
   );
 }

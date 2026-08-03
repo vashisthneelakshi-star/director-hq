@@ -62,6 +62,38 @@ export const store = {
     if (error) throw error;
   },
 
+  // Minutes of Meeting (per-meeting action item table)
+  async getMomItems(meetingId) {
+    const { data, error } = await supabase
+      .from("mom_items")
+      .select("*")
+      .eq("meeting_id", meetingId)
+      .order("s_no", { ascending: true });
+    if (error) throw error;
+    return data;
+  },
+  // Replaces the full set of rows for a meeting (simplest way to support
+  // reordering/removing rows from the editor without tracking per-row diffs).
+  async saveMomItems(meetingId, items) {
+    const owner_id = await currentUserId();
+    const { error: delErr } = await supabase.from("mom_items").delete().eq("meeting_id", meetingId);
+    if (delErr) throw delErr;
+    if (!items || items.length === 0) return [];
+    const rows = items.map((it, idx) => ({
+      meeting_id: meetingId,
+      owner_id,
+      s_no: idx + 1,
+      topic: it.topic || "",
+      assign_to: it.assignTo || "",
+      assign_to_email: it.assignToEmail || null,
+      date_of_completion: it.dateOfCompletion || null,
+      followup_remark: it.followupRemark || "",
+    }));
+    const { data, error } = await supabase.from("mom_items").insert(rows).select();
+    if (error) throw error;
+    return data;
+  },
+
   // Tasks
   async getTasks() {
     const { data, error } = await supabase.from("tasks").select("*").order("created_at", { ascending: false });

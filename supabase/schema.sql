@@ -155,3 +155,34 @@ end $$;
 -- given_to_name: who the director forwarded this task to (blank = not forwarded)
 alter table tasks add column if not exists given_by_name text;
 alter table tasks add column if not exists given_to_name text;
+
+-- MEETING AGENDA
+alter table meetings add column if not exists agenda text;
+
+-- MINUTES OF MEETING (per-meeting action item table: S.No, Topic, Assign To, Date of
+-- Completion, Follow-up Remark). One meeting can have many rows.
+create table if not exists mom_items (
+  id uuid primary key default gen_random_uuid(),
+  meeting_id uuid not null references meetings(id) on delete cascade,
+  owner_id uuid not null references auth.users(id) on delete cascade,
+  s_no integer not null default 1,
+  topic text,
+  assign_to text,
+  assign_to_email text,
+  date_of_completion date,
+  followup_remark text,
+  reminder_sent_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+alter table mom_items enable row level security;
+
+do $$
+begin
+  if not exists (select 1 from pg_policies where tablename = 'mom_items' and policyname = 'owner_all_mom_items') then
+    create policy owner_all_mom_items on mom_items for all using (auth.uid() = owner_id) with check (auth.uid() = owner_id);
+  end if;
+end $$;
+
+create index if not exists idx_mom_items_meeting on mom_items(meeting_id);
+create index if not exists idx_mom_items_owner on mom_items(owner_id);

@@ -69,6 +69,21 @@ Directors can enable a daily reminder ("you have N meetings / M tasks today") th
 
 Note: on iPhone, push notifications only work if the site is added to the Home Screen first (Safari → Share → Add to Home Screen), due to an iOS restriction. On Android/desktop it works directly in the browser.
 
+## 4. Set up meeting emails (Agenda invite + Minutes of Meeting reminders)
+
+Meetings now support an **Agenda** field, a **"Send invite by email"** button (sends the agenda straight to any email address), and a **Minutes of Meeting** window (S.No, Topic, Assign To, Email, Date of Completion, Follow-up Remark) with a manual **"Send reminder"** button per row, plus an automatic daily reminder for anything whose Date of Completion is today or overdue.
+
+1. Run the updated `supabase/schema.sql` again in the SQL Editor (adds an `agenda` column to `meetings` and a new `mom_items` table — safe to re-run).
+2. Get a **Gmail App Password** for the company Gmail account that should send these emails:
+   - Go to your Google Account → Security → 2-Step Verification (must be turned on) → App passwords.
+   - Create one for "Mail" and copy the 16-character password.
+3. In your `.env.local` (and in Vercel Project → Settings → Environment Variables), set:
+   - `GMAIL_USER` — the sending Gmail address, e.g. `directorhq.notifications@gmail.com`
+   - `GMAIL_APP_PASSWORD` — the 16-character app password from step 2 (no spaces)
+4. Redeploy on Vercel. `vercel.json` now also runs `/api/send-followup-reminders` daily at 3:30 AM UTC (~9:00 AM IST) to auto-email anyone whose action item is due/overdue and has an email on file — it only sends once per row (tracked via `reminder_sent_at`).
+
+Note: the "Assign To" field in Minutes of Meeting is just a name; add the person's email in the adjacent **Email** field if you want reminders to actually go out for that row.
+
 ## Tech stack
 
 - React 19 + Vite
