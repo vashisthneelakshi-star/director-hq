@@ -81,7 +81,7 @@ function TodoDetail({ todo, onClose, onSave, onDelete }) {
   );
 }
 
-function TodoRow({ todo, onToggle, onOpen }) {
+function TodoRow({ todo, onToggle, onOpen, onDelete }) {
   const overdue = isOverdue(todo);
   return (
     <li className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50">
@@ -110,6 +110,14 @@ function TodoRow({ todo, onToggle, onOpen }) {
         )}
       </div>
       {todo.important && <Star size={15} className="text-gold-500 fill-gold-500 shrink-0 mt-0.5" />}
+      <button
+        onClick={() => onDelete(todo.id)}
+        className="text-slate-300 hover:text-red-500 shrink-0 mt-0.5"
+        aria-label="Delete task"
+        title="Delete"
+      >
+        <Trash2 size={15} />
+      </button>
     </li>
   );
 }
@@ -196,6 +204,13 @@ export default function Todo() {
           placeholder="Add a task and press Enter..."
           className="flex-1 outline-none text-sm placeholder:text-slate-400"
         />
+        <button
+          type="submit"
+          disabled={!quickTitle.trim()}
+          className="px-3 py-1.5 text-sm font-medium rounded-lg bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+        >
+          Add
+        </button>
       </form>
 
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -214,7 +229,7 @@ export default function Todo() {
                 <div className="px-4 pt-3 pb-1 text-xs font-semibold text-slate-400 uppercase tracking-wide">Important</div>
                 <ul className="divide-y divide-slate-100">
                   {important.map((t) => (
-                    <TodoRow key={t.id} todo={t} onToggle={toggle} onOpen={setDetailTodo} />
+                    <TodoRow key={t.id} todo={t} onToggle={toggle} onOpen={setDetailTodo} onDelete={deleteTodo} />
                   ))}
                 </ul>
               </>
@@ -224,7 +239,7 @@ export default function Todo() {
                 {important.length > 0 && <div className="px-4 pt-3 pb-1 text-xs font-semibold text-slate-400 uppercase tracking-wide">Tasks</div>}
                 <ul className="divide-y divide-slate-100">
                   {otherActive.map((t) => (
-                    <TodoRow key={t.id} todo={t} onToggle={toggle} onOpen={setDetailTodo} />
+                    <TodoRow key={t.id} todo={t} onToggle={toggle} onOpen={setDetailTodo} onDelete={deleteTodo} />
                   ))}
                 </ul>
               </>
@@ -241,7 +256,7 @@ export default function Todo() {
                 {showCompleted && (
                   <ul className="divide-y divide-slate-100">
                     {completed.map((t) => (
-                      <TodoRow key={t.id} todo={t} onToggle={toggle} onOpen={setDetailTodo} />
+                      <TodoRow key={t.id} todo={t} onToggle={toggle} onOpen={setDetailTodo} onDelete={deleteTodo} />
                     ))}
                   </ul>
                 )}
