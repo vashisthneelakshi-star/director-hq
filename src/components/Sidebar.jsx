@@ -13,6 +13,8 @@ import {
   Menu,
   X,
   ShieldCheck,
+  ListChecks,
+  CalendarDays,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
@@ -21,7 +23,9 @@ import { isAdminEmail } from "../lib/isAdmin";
 const NAV_ITEMS = [
   { to: "/", label: "Overview", icon: LayoutGrid, end: true },
   { to: "/meetings", label: "Meetings", icon: Calendar },
+  { to: "/todo", label: "To-Do List", icon: ListChecks },
   { to: "/tasks", label: "Daily Tasks", icon: CheckSquare },
+  { to: "/calendar", label: "Calendar", icon: CalendarDays },
   { to: "/credentials", label: "Credentials", icon: KeyRound },
   { to: "/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/notes", label: "Notes", icon: FileText },

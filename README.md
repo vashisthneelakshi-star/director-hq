@@ -84,6 +84,16 @@ Meetings now support an **Agenda** field, a **"Send invite by email"** button (s
 
 Note: the "Assign To" field in Minutes of Meeting is just a name; add the person's email in the adjacent **Email** field if you want reminders to actually go out for that row.
 
+## 5. To-Do List, Calendar, and the 10 AM morning reminder
+
+Two new sidebar buttons:
+- **To-Do List** — a quick Microsoft-To-Do-style checklist (separate from the more detailed "Daily Tasks" module): type and hit Enter to add, checkbox to complete, star to mark important, click an item for notes/due date.
+- **Calendar** — a month grid where clicking any day opens a note box to write what's happening that day. A preview of the note shows right on the day cell.
+
+Both are backed by the `todos` and `calendar_notes` tables added in the updated `supabase/schema.sql` — run it again in the SQL Editor (safe to re-run).
+
+**Automatic 10 AM reminder** (`/api/send-morning-reminders`, cron at `30 4 * * *` = ~10:00 AM IST): every morning it looks at each director's to-do items due today (or overdue) and today's calendar note, then sends the summary both as a **mobile push notification** (if they've enabled push — see section 3 above) and as an **email** (to the director's own login email, using the same `GMAIL_USER`/`GMAIL_APP_PASSWORD` set up in section 4). No extra setup needed beyond sections 3 and 4 already being configured — just redeploy after adding this update.
+
 ## Tech stack
 
 - React 19 + Vite

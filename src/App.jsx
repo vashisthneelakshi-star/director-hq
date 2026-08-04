@@ -5,6 +5,8 @@ import Sidebar from "./components/Sidebar";
 import Overview from "./pages/Overview";
 import Meetings from "./pages/Meetings";
 import Tasks from "./pages/Tasks";
+import Todo from "./pages/Todo";
+import DayCalendar from "./pages/DayCalendar";
 import Credentials from "./pages/Credentials";
 import Analytics from "./pages/Analytics";
 import Notes from "./pages/Notes";
@@ -41,7 +43,9 @@ export default function App() {
                   <Routes>
                     <Route path="/" element={<Overview />} />
                     <Route path="/meetings" element={<Meetings />} />
+                    <Route path="/todo" element={<Todo />} />
                     <Route path="/tasks" element={<Tasks />} />
+                    <Route path="/calendar" element={<DayCalendar />} />
                     <Route path="/credentials" element={<Credentials />} />
                     <Route path="/analytics" element={<Analytics />} />
                     <Route path="/notes" element={<Notes />} />

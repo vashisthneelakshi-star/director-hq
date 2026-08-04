@@ -186,3 +186,52 @@ end $$;
 
 create index if not exists idx_mom_items_meeting on mom_items(meeting_id);
 create index if not exists idx_mom_items_owner on mom_items(owner_id);
+
+-- TO-DO LIST (quick Microsoft-To-Do-style checklist — separate from the more
+-- detailed Daily Tasks module: title, optional notes, optional due date,
+-- star/important, done)
+create table if not exists todos (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references auth.users(id) on delete cascade,
+  title text not null,
+  notes text,
+  due_date date,
+  important boolean not null default false,
+  completed boolean not null default false,
+  completed_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+alter table todos enable row level security;
+
+do $$
+begin
+  if not exists (select 1 from pg_policies where tablename = 'todos' and policyname = 'owner_all_todos') then
+    create policy owner_all_todos on todos for all using (auth.uid() = owner_id) with check (auth.uid() = owner_id);
+  end if;
+end $$;
+
+create index if not exists idx_todos_owner on todos(owner_id);
+create index if not exists idx_todos_due on todos(due_date);
+
+-- CALENDAR DAY NOTES ("what's on this day" — one free-text note per director
+-- per calendar date)
+create table if not exists calendar_notes (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references auth.users(id) on delete cascade,
+  note_date date not null,
+  content text,
+  updated_at timestamptz not null default now(),
+  unique(owner_id, note_date)
+);
+
+alter table calendar_notes enable row level security;
+
+do $$
+begin
+  if not exists (select 1 from pg_policies where tablename = 'calendar_notes' and policyname = 'owner_all_calendar_notes') then
+    create policy owner_all_calendar_notes on calendar_notes for all using (auth.uid() = owner_id) with check (auth.uid() = owner_id);
+  end if;
+end $$;
+
+create index if not exists idx_calendar_notes_owner_date on calendar_notes(owner_id, note_date);

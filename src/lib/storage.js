@@ -94,6 +94,74 @@ export const store = {
     return data;
   },
 
+  // To-Do List
+  async getTodos() {
+    const { data, error } = await supabase.from("todos").select("*").order("created_at", { ascending: false });
+    if (error) throw error;
+    return data;
+  },
+  async addTodo(form) {
+    const owner_id = await currentUserId();
+    const { data, error } = await supabase
+      .from("todos")
+      .insert([
+        {
+          owner_id,
+          title: form.title,
+          notes: form.notes || null,
+          due_date: form.dueDate || null,
+          important: Boolean(form.important),
+        },
+      ])
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+  async updateTodo(id, patch) {
+    const row = {};
+    if (patch.title !== undefined) row.title = patch.title;
+    if (patch.notes !== undefined) row.notes = patch.notes || null;
+    if (patch.dueDate !== undefined) row.due_date = patch.dueDate || null;
+    if (patch.important !== undefined) row.important = Boolean(patch.important);
+    if (patch.completed !== undefined) {
+      row.completed = Boolean(patch.completed);
+      row.completed_at = patch.completed ? new Date().toISOString() : null;
+    }
+    const { error } = await supabase.from("todos").update(row).eq("id", id);
+    if (error) throw error;
+  },
+  async deleteTodo(id) {
+    const { error } = await supabase.from("todos").delete().eq("id", id);
+    if (error) throw error;
+  },
+
+  // Calendar day notes ("what's on this day")
+  async getCalendarNotesRange(startDate, endDate) {
+    const { data, error } = await supabase
+      .from("calendar_notes")
+      .select("*")
+      .gte("note_date", startDate)
+      .lte("note_date", endDate);
+    if (error) throw error;
+    return data;
+  },
+  async saveCalendarNote(dateStr, content) {
+    const owner_id = await currentUserId();
+    if (!content || !content.trim()) {
+      const { error } = await supabase.from("calendar_notes").delete().eq("owner_id", owner_id).eq("note_date", dateStr);
+      if (error) throw error;
+      return null;
+    }
+    const { data, error } = await supabase
+      .from("calendar_notes")
+      .upsert([{ owner_id, note_date: dateStr, content, updated_at: new Date().toISOString() }], { onConflict: "owner_id,note_date" })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
   // Tasks
   async getTasks() {
     const { data, error } = await supabase.from("tasks").select("*").order("created_at", { ascending: false });
