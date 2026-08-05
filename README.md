@@ -94,6 +94,26 @@ Both are backed by the `todos` and `calendar_notes` tables added in the updated 
 
 **Automatic 10 AM reminder** (`/api/send-morning-reminders`, cron at `30 4 * * *` = ~10:00 AM IST): every morning it looks at each director's to-do items due today (or overdue) and today's calendar note, then emails the summary to the director's own login email using the same `GMAIL_USER`/`GMAIL_APP_PASSWORD` set up in section 4. Mail-only — no mobile push involved for this one. No extra setup needed beyond section 4 already being configured — just redeploy after adding this update.
 
+## 6. Official vs Personal tasks
+
+Daily Tasks now has two tabs — **Official Task** and **Personal Task** — with independent counts, filters, and search. Every task you add is tagged with whichever tab is active; you can also change a task's type from inside its detail modal (Type dropdown). Run `supabase/schema.sql` again (adds a `task_type` column) — **all existing tasks are automatically migrated to "Official Task"**, nothing gets lost or needs manual re-tagging.
+
+## 7. Install the app on mobile (like a real app, no browser bar)
+
+This update adds a proper PWA manifest with a branded maroon-gold icon, so the app can now be installed on the phone's home screen and opens full-screen like a native app (no address bar), same idea as the desktop install covered earlier.
+
+**Android (Chrome):**
+1. Open `director-hq.vercel.app` in Chrome
+2. Tap the **⋮ menu** → **"Install app"** (or you'll see an "Add Director HQ to Home screen" banner automatically)
+3. Confirm — the branded icon appears on the home screen/app drawer and opens without any browser UI
+
+**iPhone (Safari):**
+1. Open the site in Safari (must be Safari, not Chrome, for this to work on iOS)
+2. Tap the **Share** icon (square with an arrow) → **"Add to Home Screen"**
+3. Confirm — same branded icon, opens full-screen
+
+No extra env vars or setup needed for this — just redeploy after this update and re-install (if it was already added to the home screen before this change, remove and re-add once to pick up the new icon/manifest).
+
 ## Tech stack
 
 - React 19 + Vite

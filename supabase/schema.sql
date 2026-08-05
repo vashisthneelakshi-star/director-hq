@@ -156,6 +156,18 @@ end $$;
 alter table tasks add column if not exists given_by_name text;
 alter table tasks add column if not exists given_to_name text;
 
+-- TASK TYPE (Official vs Personal sub-lists inside Daily Tasks). Existing
+-- rows and any row where this wasn't set explicitly default to 'official'.
+alter table tasks add column if not exists task_type text not null default 'official';
+update tasks set task_type = 'official' where task_type is null;
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'tasks_task_type_check') then
+    alter table tasks add constraint tasks_task_type_check check (task_type in ('official', 'personal'));
+  end if;
+end $$;
+
 -- MEETING AGENDA
 alter table meetings add column if not exists agenda text;
 

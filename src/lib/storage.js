@@ -17,22 +17,24 @@ function mapMeetingOut(row) {
 }
 
 function taskToDb(task) {
-  const { dueDate, assignmentType, personName, givenByName, givenToName, ...rest } = task;
+  const { dueDate, assignmentType, personName, givenByName, givenToName, taskType, ...rest } = task;
   const out = { ...rest };
   if (dueDate !== undefined) out.due_date = dueDate || null;
   if (givenByName !== undefined) out.given_by_name = givenByName || null;
   if (givenToName !== undefined) out.given_to_name = givenToName || null;
+  if (taskType !== undefined) out.task_type = taskType || "official";
   return out;
 }
 
 function taskFromDb(row) {
   if (!row) return row;
-  const { due_date, assignment_type, person_name, given_by_name, given_to_name, ...rest } = row;
+  const { due_date, assignment_type, person_name, given_by_name, given_to_name, task_type, ...rest } = row;
   return {
     ...rest,
     dueDate: due_date,
     givenByName: given_by_name || "",
     givenToName: given_to_name || "",
+    taskType: task_type || "official",
   };
 }
 

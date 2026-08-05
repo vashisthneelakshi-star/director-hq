@@ -21,7 +21,7 @@ function AppShell({ children }) {
   return (
     <div className="flex min-h-screen bg-paper flex-col lg:flex-row">
       <Sidebar />
-      <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-6xl w-full mx-auto">{children}</main>
+      <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 max-w-6xl w-full mx-auto overflow-x-hidden">{children}</main>
     </div>
   );
 }

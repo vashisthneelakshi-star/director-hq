@@ -26,7 +26,7 @@ function isOverdue(task) {
   return due < new Date();
 }
 
-function TaskModal({ task, onClose, onSave, onDelete }) {
+function TaskModal({ task, onClose, onSave, onDelete, defaultType }) {
   const isEdit = Boolean(task?.id);
   const [form, setForm] = useState({
     title: task?.title || "",
@@ -36,6 +36,7 @@ function TaskModal({ task, onClose, onSave, onDelete }) {
     dueDate: task?.dueDate || "",
     givenByName: task?.givenByName || "",
     givenToName: task?.givenToName || "",
+    taskType: task?.taskType || defaultType || "official",
   });
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
@@ -68,6 +69,13 @@ function TaskModal({ task, onClose, onSave, onDelete }) {
             </label>
             <div className="grid grid-cols-2 gap-3">
               <label className="block">
+                <span className="text-sm font-medium text-slate-700">Type</span>
+                <select value={form.taskType} onChange={set("taskType")} className="input mt-1">
+                  <option value="official">Official Task</option>
+                  <option value="personal">Personal Task</option>
+                </select>
+              </label>
+              <label className="block">
                 <span className="text-sm font-medium text-slate-700">Priority</span>
                 <select value={form.priority} onChange={set("priority")} className="input mt-1">
                   <option value="high">High</option>
@@ -75,15 +83,15 @@ function TaskModal({ task, onClose, onSave, onDelete }) {
                   <option value="low">Low</option>
                 </select>
               </label>
-              <label className="block">
-                <span className="text-sm font-medium text-slate-700">Status</span>
-                <select value={form.status} onChange={set("status")} className="input mt-1">
-                  <option value="todo">To Do</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="done">Done</option>
-                </select>
-              </label>
             </div>
+            <label className="block">
+              <span className="text-sm font-medium text-slate-700">Status</span>
+              <select value={form.status} onChange={set("status")} className="input mt-1">
+                <option value="todo">To Do</option>
+                <option value="in_progress">In Progress</option>
+                <option value="done">Done</option>
+              </select>
+            </label>
             <label className="block">
               <span className="text-sm font-medium text-slate-700">Deadline</span>
               <input type="date" value={form.dueDate} onChange={set("dueDate")} className="input mt-1" />
@@ -155,6 +163,7 @@ export default function Tasks() {
   const { nameFor } = useDirectors(admin);
   const [tasks, setTasks] = useState([]);
   const [searchParams, setSearchParams] = useSearchParams();
+  const [typeTab, setTypeTab] = useState("official");
   const [statusFilter, setStatusFilter] = useState(searchParams.get("status") || "All");
   const [priorityFilter, setPriorityFilter] = useState("All");
   const [assignmentFilter, setAssignmentFilter] = useState("All");
@@ -179,6 +188,7 @@ export default function Tasks() {
 
   const filtered = useMemo(() => {
     return tasks.filter((t) => {
+      const matchesType = (t.taskType || "official") === typeTab;
       let matchesStatus = true;
       if (statusFilter === "Overdue") matchesStatus = isOverdue(t);
       else if (statusFilter !== "All") matchesStatus = t.status === STATUS_MAP[statusFilter];
@@ -194,11 +204,12 @@ export default function Tasks() {
         t.description?.toLowerCase().includes(q) ||
         t.givenByName?.toLowerCase().includes(q) ||
         t.givenToName?.toLowerCase().includes(q);
-      return matchesStatus && matchesPriority && matchesAssignment && matchesQuery;
+      return matchesType && matchesStatus && matchesPriority && matchesAssignment && matchesQuery;
     });
-  }, [tasks, statusFilter, priorityFilter, assignmentFilter, query]);
+  }, [tasks, typeTab, statusFilter, priorityFilter, assignmentFilter, query]);
 
-  const doneCount = tasks.filter((t) => t.status === "done").length;
+  const tasksInTab = useMemo(() => tasks.filter((t) => (t.taskType || "official") === typeTab), [tasks, typeTab]);
+  const doneCount = tasksInTab.filter((t) => t.status === "done").length;
 
   const handleAdd = async (form) => {
     const created = await store.addTask(form);
@@ -241,18 +252,37 @@ export default function Tasks() {
 
   return (
     <div>
-      <div className="flex items-start justify-between mb-5">
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Daily Tasks</h1>
           <p className="text-slate-500 text-sm mt-1">
-            {filtered.length} of {tasks.length} tasks · {doneCount} done
+            {filtered.length} of {tasksInTab.length} tasks · {doneCount} done
           </p>
         </div>
         <button
           onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium px-4 py-2 rounded-lg"
+          className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium px-4 py-2 rounded-lg shrink-0 whitespace-nowrap"
         >
           <Plus size={16} /> Add Task
+        </button>
+      </div>
+
+      <div className="flex gap-1 mb-4 bg-slate-100 rounded-lg p-1 w-fit">
+        <button
+          onClick={() => setTypeTab("official")}
+          className={`px-4 py-1.5 rounded-md text-sm font-medium ${
+            typeTab === "official" ? "bg-white shadow-sm text-slate-900" : "text-slate-500"
+          }`}
+        >
+          Official Task
+        </button>
+        <button
+          onClick={() => setTypeTab("personal")}
+          className={`px-4 py-1.5 rounded-md text-sm font-medium ${
+            typeTab === "personal" ? "bg-white shadow-sm text-slate-900" : "text-slate-500"
+          }`}
+        >
+          Personal Task
         </button>
       </div>
 
@@ -391,7 +421,7 @@ export default function Tasks() {
       </div>
 
       {showAddModal && (
-        <TaskModal onClose={() => setShowAddModal(false)} onSave={handleAdd} />
+        <TaskModal onClose={() => setShowAddModal(false)} onSave={handleAdd} defaultType={typeTab} />
       )}
       {editingTask && (
         <TaskModal task={editingTask} onClose={closeEdit} onSave={handleEditSave} onDelete={handleDelete} />
