@@ -1,9 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 
 // Accepts pasted meeting-notes text, or a base64-encoded PDF/DOCX file, and
-// asks Claude to pull out a structured action-item table: topic, who it's
-// assigned to, and a date of completion if one is mentioned — leaving
-// whatever isn't present blank rather than guessing.
+// asks Google's Gemini (free tier) to pull out a structured action-item
+// table: topic, who it's assigned to, and a date of completion if one is
+// mentioned — leaving whatever isn't present blank rather than guessing.
 //
 // POST body: { text } OR { fileBase64, fileName, mimeType }
 // Returns: { items: [{ topic, assignTo, dateOfCompletion }], sourceText }
@@ -36,13 +36,13 @@ export default async function handler(req, res) {
 
   const supabaseUrl = process.env.VITE_SUPABASE_URL;
   const anonKey = process.env.VITE_SUPABASE_ANON_KEY;
-  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  const geminiKey = process.env.GEMINI_API_KEY;
 
   if (!supabaseUrl || !anonKey) {
     return res.status(500).json({ error: "Missing required environment variables" });
   }
-  if (!anthropicKey) {
-    return res.status(500).json({ error: "ANTHROPIC_API_KEY is not configured on the server" });
+  if (!geminiKey) {
+    return res.status(500).json({ error: "GEMINI_API_KEY is not configured on the server" });
   }
 
   const authHeader = req.headers["authorization"] || "";
@@ -87,19 +87,17 @@ ${clipped}
 """`;
 
   try {
-    const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": anthropicKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 2000,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
+    const aiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0, maxOutputTokens: 2000 },
+        }),
+      }
+    );
 
     if (!aiRes.ok) {
       const errText = await aiRes.text();
@@ -107,8 +105,8 @@ ${clipped}
     }
 
     const aiJson = await aiRes.json();
-    const raw = (aiJson.content || [])
-      .map((b) => (b.type === "text" ? b.text : ""))
+    const raw = (aiJson.candidates?.[0]?.content?.parts || [])
+      .map((p) => p.text || "")
       .join("")
       .trim()
       .replace(/^```json\s*/i, "")
