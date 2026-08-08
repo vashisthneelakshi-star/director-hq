@@ -37,7 +37,9 @@ export default async function handler(req, res) {
   const [{ data: items, error }, { data: usersData, error: usersErr }] = await Promise.all([
     supabase
       .from("mom_items")
-      .select("id, owner_id, topic, assign_to, assign_to_email, date_of_completion, followup_remark, meetings(title)")
+      .select(
+        "id, owner_id, topic, assign_to, assign_to_email, date_of_completion, followup_remark, meetings(title, date, time, location)"
+      )
       .lte("date_of_completion", today)
       .is("reminder_sent_at", null)
       .not("assign_to_email", "is", null),
@@ -57,6 +59,8 @@ export default async function handler(req, res) {
   for (const item of items || []) {
     if (!item.assign_to_email) continue;
     const meetingTitle = item.meetings?.title || "Meeting";
+    const meetingWhen = [fmtDate(item.meetings?.date), item.meetings?.time].filter(Boolean).join(" • ");
+    const meetingWhere = item.meetings?.location || "";
     const director = directorById.get(item.owner_id) || { name: "Director HQ", email: gmailUser };
     try {
       await transporter.sendMail({
@@ -71,6 +75,8 @@ export default async function handler(req, res) {
             <table style="border-collapse:collapse;margin-top:12px;" cellpadding="8">
               <tr><td style="border:1px solid #e5e7eb;"><b>Topic</b></td><td style="border:1px solid #e5e7eb;">${item.topic || ""}</td></tr>
               <tr><td style="border:1px solid #e5e7eb;"><b>Assigned To</b></td><td style="border:1px solid #e5e7eb;">${item.assign_to || ""}</td></tr>
+              ${meetingWhen ? `<tr><td style="border:1px solid #e5e7eb;"><b>Meeting Time</b></td><td style="border:1px solid #e5e7eb;">${meetingWhen}</td></tr>` : ""}
+              ${meetingWhere ? `<tr><td style="border:1px solid #e5e7eb;"><b>Meeting Location</b></td><td style="border:1px solid #e5e7eb;">${meetingWhere}</td></tr>` : ""}
               <tr><td style="border:1px solid #e5e7eb;"><b>Date of Completion</b></td><td style="border:1px solid #e5e7eb;">${fmtDate(item.date_of_completion)}</td></tr>
               <tr><td style="border:1px solid #e5e7eb;"><b>Remark</b></td><td style="border:1px solid #e5e7eb;">${item.followup_remark || ""}</td></tr>
             </table>
