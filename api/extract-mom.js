@@ -89,6 +89,12 @@ Only include an item if there's an identifiable topic/task. Leave assignTo or da
 CRITICAL RULE — do not duplicate headings and their sub-points as separate rows:
 Numbered points in these notes are often followed by their own indented/re-numbered sub-points. The top-level number is just a section heading for the sub-points below it, NOT a task itself. When a numbered point is immediately followed by its own list of sub-points, SKIP that heading entirely and output only the sub-points. Only output the top-level point by itself if it has no sub-points under it.
 
+CRITICAL RULE — don't split one task across multiple sentences into separate rows:
+A single numbered point is often written as 2-3 sentences that together describe ONE task (e.g. "Create a list of X. Collect information about Y for each entry in that list.") — that's one action item, not two. Only create separate rows when the notes actually enumerate separate sub-points (numbered/bulleted), not just separate sentences elaborating on the same task.
+
+CRITICAL RULE — catch trailing general instructions:
+Sometimes after all the numbered points, there's a closing sentence or paragraph that itself contains a real instruction applying broadly across the meeting (e.g. "Develop formats, follow-up sheets and dashboards for all these tasks"). If that closing text contains an actual task (not just a list of attendee/working-group names), include it as its own item too — don't skip it just because it comes after the numbered list. But a plain list of people's names (e.g. "Working Group - Name1, Name2, Name3") is NOT a task — never turn a name list into an item.
+
 Example input:
   3. The mission needs to be refined and implemented for readers.
     1. Defining the mission for readers.
