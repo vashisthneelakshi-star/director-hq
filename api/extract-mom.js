@@ -79,6 +79,13 @@ Read the notes below and return a JSON array of action items. For each item incl
 - "dateOfCompletion": a due/completion date if one is mentioned, formatted as YYYY-MM-DD — otherwise ""
 
 Only include an item if there's an identifiable topic/task. Leave assignTo or dateOfCompletion as "" when not stated in the text — never invent a name or date.
+
+Numbered points often have their own numbered sub-points nested under them. When a point has sub-points listed under it:
+- Do NOT create a separate row for the parent/heading line itself — it's just a category label, not its own action item.
+- Instead create one row per sub-point, since those are the actual concrete tasks.
+- Only create a row for the parent line on its own if it has NO sub-points (i.e. it's a standalone task).
+This avoids listing the same work twice (once as a vague heading, once as its real sub-tasks).
+
 Respond with ONLY the JSON array, no other text, no markdown fences.
 
 Notes:
