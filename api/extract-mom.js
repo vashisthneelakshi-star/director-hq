@@ -74,9 +74,14 @@ export default async function handler(req, res) {
   const prompt = `You are extracting a Minutes-of-Meeting action-item table from raw meeting notes.
 
 Read the notes below and return a JSON array of action items. For each item include:
-- "topic": what needs to be done (short phrase, required)
+- "topic": what needs to be done, written as a clear, self-contained phrase (required)
 - "assignTo": the person's name it's assigned to, if mentioned — otherwise ""
 - "dateOfCompletion": a due/completion date if one is mentioned, formatted as YYYY-MM-DD — otherwise ""
+
+Writing the "topic" well matters — don't just copy a fragment verbatim if it only makes sense next to earlier context:
+- Resolve vague references. If a line says "work on these areas" or "implement this" or "complete it", figure out from the surrounding text what "these areas" / "this" / "it" actually refers to, and name those things directly in the topic instead of leaving a dangling reference.
+- Example: if the notes list "income, health, crime prevention, education" and then separately say "Work on these areas and present an action plan," the topic should read something like "Work on income, health, crime prevention and education, and present an action plan" — not the vague original fragment.
+- Keep it a short, complete phrase someone could understand without reading the rest of the notes.
 
 Only include an item if there's an identifiable topic/task. Leave assignTo or dateOfCompletion as "" when not stated in the text — never invent a name or date.
 
