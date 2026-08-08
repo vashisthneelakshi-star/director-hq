@@ -71,19 +71,12 @@ export default async function handler(req, res) {
   // Keep prompts reasonably sized
   const clipped = sourceText.slice(0, 20000);
 
-  const prompt = `You are extracting a Minutes-of-Meeting action-item table from raw meeting notes.
+  const prompt = `You are splitting raw meeting notes into a Minutes-of-Meeting action-item table. Do NOT rewrite, paraphrase, summarize, or rephrase anything — copy each point's own wording exactly as written.
 
 Read the notes below and return a JSON array of action items. For each item include:
-- "topic": what needs to be done, written as a clear, self-contained phrase (required)
+- "topic": the point's own text, copied exactly as it appears in the notes (required). Only trim the leading number/bullet marker (e.g. "1.", "•") and surrounding whitespace — do not otherwise change, shorten, reorder, or reword a single word of it.
 - "assignTo": the person's name it's assigned to, if mentioned — otherwise ""
 - "dateOfCompletion": a due/completion date if one is mentioned, formatted as YYYY-MM-DD — otherwise ""
-
-Writing the "topic" well matters — don't just copy a fragment verbatim if it only makes sense next to earlier context:
-- Resolve vague references. If a line says "work on these areas" or "implement this" or "complete it", figure out from the surrounding text what "these areas" / "this" / "it" actually refers to, and name those things directly in the topic instead of leaving a dangling reference.
-- Example: if the notes list "income, health, crime prevention, education" and then separately say "Work on these areas and present an action plan," the topic should read something like "Work on income, health, crime prevention and education, and present an action plan" — not the vague original fragment.
-- Keep it a short, complete phrase someone could understand without reading the rest of the notes.
-- Lead with the action/verb, not a bare list. A topic should read as "[Do X], covering/for [details]" — not just a comma-separated list of nouns with the verb buried or missing. E.g. write "Present an action plan covering income, health, crime prevention and education" rather than "Income, health, crime prevention, education — present an action plan." If a point poses a question or a goal before its actual instruction (e.g. "What areas should we focus on? ... Work on these areas and present a plan"), the topic should center on the actual instruction ("Work on ... and present a plan"), not the rhetorical question.
-- STRICT ACCURACY RULE: when resolving a reference, only use words/items that literally appear elsewhere in the notes. Never add, substitute, or guess a word that isn't in the source text — not even a plausible-sounding one. If you're not fully certain what a reference points to, leave the topic closer to the original wording instead of guessing.
 
 Only include an item if there's an identifiable topic/task. Leave assignTo or dateOfCompletion as "" when not stated in the text — never invent a name or date.
 
