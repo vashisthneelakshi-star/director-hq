@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 
 // Accepts pasted meeting-notes text, or a base64-encoded PDF/DOCX file, and
-// asks Google's Gemini (free tier) to pull out a structured action-item
+// asks Groq's free API (Llama 3.3) to pull out a structured action-item
 // table: topic, who it's assigned to, and a date of completion if one is
 // mentioned — leaving whatever isn't present blank rather than guessing.
 //
@@ -36,13 +36,13 @@ export default async function handler(req, res) {
 
   const supabaseUrl = process.env.VITE_SUPABASE_URL;
   const anonKey = process.env.VITE_SUPABASE_ANON_KEY;
-  const geminiKey = process.env.GEMINI_API_KEY;
+  const groqKey = process.env.GROQ_API_KEY;
 
   if (!supabaseUrl || !anonKey) {
     return res.status(500).json({ error: "Missing required environment variables" });
   }
-  if (!geminiKey) {
-    return res.status(500).json({ error: "GEMINI_API_KEY is not configured on the server" });
+  if (!groqKey) {
+    return res.status(500).json({ error: "GROQ_API_KEY is not configured on the server" });
   }
 
   const authHeader = req.headers["authorization"] || "";
@@ -87,17 +87,16 @@ ${clipped}
 """`;
 
   try {
-    const aiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0, maxOutputTokens: 2000 },
-        }),
-      }
-    );
+    const aiRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${groqKey}` },
+      body: JSON.stringify({
+        model: "llama-3.3-70b-versatile",
+        temperature: 0,
+        max_tokens: 2000,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
 
     if (!aiRes.ok) {
       const errText = await aiRes.text();
@@ -105,9 +104,7 @@ ${clipped}
     }
 
     const aiJson = await aiRes.json();
-    const raw = (aiJson.candidates?.[0]?.content?.parts || [])
-      .map((p) => p.text || "")
-      .join("")
+    const raw = (aiJson.choices?.[0]?.message?.content || "")
       .trim()
       .replace(/^```json\s*/i, "")
       .replace(/^```\s*/i, "")
