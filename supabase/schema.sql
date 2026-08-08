@@ -138,6 +138,38 @@ begin
   end if;
 end $$;
 
+-- MOM (Minutes of Meeting) AUTO-EXTRACT SOURCE
+-- Stores the raw pasted text / uploaded source document that a meeting's
+-- Minutes-of-Meeting table was auto-extracted from, so it can be viewed later.
+alter table meetings add column if not exists mom_source_text text;
+alter table meetings add column if not exists mom_source_file_url text;
+alter table meetings add column if not exists mom_source_file_name text;
+
+-- Storage bucket for uploaded MoM source files (PDF/Word)
+insert into storage.buckets (id, name, public)
+values ('mom-uploads', 'mom-uploads', false)
+on conflict (id) do nothing;
+
+do $$
+begin
+  if not exists (select 1 from pg_policies where tablename = 'objects' and schemaname='storage' and policyname = 'owner_mom_uploads_insert') then
+    create policy owner_mom_uploads_insert on storage.objects for insert
+      with check (bucket_id = 'mom-uploads' and (storage.foldername(name))[1] = auth.uid()::text);
+  end if;
+  if not exists (select 1 from pg_policies where tablename = 'objects' and schemaname='storage' and policyname = 'owner_mom_uploads_select') then
+    create policy owner_mom_uploads_select on storage.objects for select
+      using (bucket_id = 'mom-uploads' and (storage.foldername(name))[1] = auth.uid()::text);
+  end if;
+  if not exists (select 1 from pg_policies where tablename = 'objects' and schemaname='storage' and policyname = 'owner_mom_uploads_delete') then
+    create policy owner_mom_uploads_delete on storage.objects for delete
+      using (bucket_id = 'mom-uploads' and (storage.foldername(name))[1] = auth.uid()::text);
+  end if;
+  if not exists (select 1 from pg_policies where tablename = 'objects' and schemaname='storage' and policyname = 'admin_mom_uploads_select') then
+    create policy admin_mom_uploads_select on storage.objects for select
+      using (bucket_id = 'mom-uploads' and is_admin());
+  end if;
+end $$;
+
 -- TASK ASSIGNMENT (who gave the task / who it was forwarded to)
 alter table tasks add column if not exists assignment_type text not null default 'self';
 alter table tasks add column if not exists person_name text;

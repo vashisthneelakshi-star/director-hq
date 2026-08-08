@@ -64,6 +64,23 @@ export const store = {
     if (error) throw error;
   },
 
+  // Uploads a MoM source file (PDF/Word) to private storage and returns the
+  // storage path (saved in meetings.mom_source_file_url — despite the name,
+  // it's a path, not a public URL, since the bucket is private).
+  async uploadMomSourceFile(file) {
+    const owner_id = await currentUserId();
+    const path = `${owner_id}/${Date.now()}-${file.name}`;
+    const { error } = await supabase.storage.from("mom-uploads").upload(path, file, { upsert: false });
+    if (error) throw error;
+    return path;
+  },
+  // Storage path -> short-lived signed URL, generated fresh each time it's viewed.
+  async getMomSourceFileUrl(path) {
+    const { data, error } = await supabase.storage.from("mom-uploads").createSignedUrl(path, 3600);
+    if (error) throw error;
+    return data.signedUrl;
+  },
+
   // Minutes of Meeting (per-meeting action item table)
   async getMomItems(meetingId) {
     const { data, error } = await supabase

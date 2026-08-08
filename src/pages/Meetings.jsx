@@ -15,6 +15,10 @@ import {
   UserRound,
   ClipboardList,
   Mail,
+  Sparkles,
+  Upload,
+  Eye,
+  FileText,
 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { store } from "../lib/storage";
@@ -23,6 +27,7 @@ import { useAuth } from "../lib/AuthContext";
 import { isAdminEmail } from "../lib/isAdmin";
 import { useDirectors } from "../lib/useDirectors";
 import { sendMeetingInviteEmail, sendFollowupReminderEmail } from "../lib/mail";
+import { extractMomItems } from "../lib/momExtract";
 
 const FILTERS = ["All", "Scheduled", "Needs Update", "Completed", "Cancelled"];
 
@@ -213,6 +218,21 @@ function MinutesModal({ meeting, onClose }) {
   const [rowMsg, setRowMsg] = useState({});
   const [saveMsg, setSaveMsg] = useState("");
 
+  // Paste-or-upload auto-extract
+  const [showInput, setShowInput] = useState(false);
+  const [pasteText, setPasteText] = useState("");
+  const [pickedFile, setPickedFile] = useState(null);
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState("");
+
+  // What's actually been saved for this meeting (used by the "view source" icon)
+  const [savedSourceText, setSavedSourceText] = useState(meeting.mom_source_text || "");
+  const [savedFilePath, setSavedFilePath] = useState(meeting.mom_source_file_url || "");
+  const [savedFileName, setSavedFileName] = useState(meeting.mom_source_file_name || "");
+  const [viewerText, setViewerText] = useState(null);
+  const [viewerLoading, setViewerLoading] = useState(false);
+  const [viewerError, setViewerError] = useState("");
+
   useEffect(() => {
     (async () => {
       const items = await store.getMomItems(meeting.id);
@@ -241,12 +261,85 @@ function MinutesModal({ meeting, onClose }) {
 
   const removeRow = (idx) => setRows((r) => r.filter((_, i) => i !== idx).map((row, i) => ({ ...row, sNo: i + 1 })));
 
+  const handleExtract = async () => {
+    if (!pasteText.trim() && !pickedFile) {
+      setExtractError("Pehle text paste karo ya file chuno");
+      return;
+    }
+    setExtracting(true);
+    setExtractError("");
+    try {
+      const { items, sourceText } = await extractMomItems(
+        pickedFile ? { file: pickedFile } : { text: pasteText }
+      );
+      if (items.length === 0) {
+        setExtractError("Koi item nahi mila is text/file mein");
+        return;
+      }
+      setRows((prev) => {
+        const existing = prev.filter((r) => r.topic.trim() || r.assignTo.trim());
+        const added = items.map((it) => ({
+          topic: it.topic,
+          assignTo: it.assignTo,
+          assignToEmail: "",
+          dateOfCompletion: it.dateOfCompletion,
+          followupRemark: "",
+        }));
+        return [...existing, ...added].map((row, i) => ({ ...row, sNo: i + 1 }));
+      });
+      if (!pickedFile) setPasteText(sourceText);
+      setShowInput(false);
+    } catch (err) {
+      setExtractError(err.message || "Extraction failed");
+    } finally {
+      setExtracting(false);
+    }
+  };
+
+  const viewSource = async () => {
+    setViewerError("");
+    if (savedFilePath) {
+      setViewerLoading(true);
+      try {
+        const url = await store.getMomSourceFileUrl(savedFilePath);
+        window.open(url, "_blank", "noopener,noreferrer");
+      } catch (err) {
+        setViewerError(err.message || "File nahi khul payi");
+      } finally {
+        setViewerLoading(false);
+      }
+    } else if (savedSourceText) {
+      setViewerText(savedSourceText);
+    }
+  };
+
   const save = async () => {
     setSaving(true);
     setSaveMsg("");
     try {
       const cleaned = rows.filter((r) => r.topic.trim() || r.assignTo.trim());
       await store.saveMomItems(meeting.id, cleaned);
+
+      // Persist whatever source (pasted text or uploaded file) was used this session
+      const patch = {};
+      if (pickedFile) {
+        const path = await store.uploadMomSourceFile(pickedFile);
+        patch.mom_source_file_url = path;
+        patch.mom_source_file_name = pickedFile.name;
+        patch.mom_source_text = null;
+      } else if (pasteText.trim() && pasteText !== savedSourceText) {
+        patch.mom_source_text = pasteText;
+        patch.mom_source_file_url = null;
+        patch.mom_source_file_name = null;
+      }
+      if (Object.keys(patch).length > 0) {
+        await store.updateMeeting(meeting.id, patch);
+        setSavedSourceText(patch.mom_source_text ?? savedSourceText);
+        setSavedFilePath(patch.mom_source_file_url ?? savedFilePath);
+        setSavedFileName(patch.mom_source_file_name ?? savedFileName);
+        setPickedFile(null);
+      }
+
       setSaveMsg("Minutes save ho gaye ✓");
     } catch (err) {
       setSaveMsg("Error: " + err.message);
@@ -277,13 +370,113 @@ function MinutesModal({ meeting, onClose }) {
       <div className="bg-white rounded-xl shadow-xl w-full max-w-6xl max-h-[92vh] flex flex-col">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">Minutes of Meeting</h2>
+            <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+              Minutes of Meeting
+              {(savedSourceText || savedFilePath) && (
+                <button
+                  type="button"
+                  onClick={viewSource}
+                  disabled={viewerLoading}
+                  title={savedFileName ? `View source: ${savedFileName}` : "View pasted source text"}
+                  className="text-slate-400 hover:text-brand-600 disabled:opacity-50"
+                >
+                  {viewerLoading ? <Loader2 size={16} className="animate-spin" /> : <Eye size={16} />}
+                </button>
+              )}
+            </h2>
             <p className="text-sm text-slate-500">{meeting.title}</p>
+            {viewerError && <p className="text-xs text-red-500 mt-1">{viewerError}</p>}
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
             <X size={18} />
           </button>
         </div>
+
+        <div className="px-6 pt-4 shrink-0">
+          {!showInput ? (
+            <button
+              type="button"
+              onClick={() => setShowInput(true)}
+              className="flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:underline"
+            >
+              <Sparkles size={14} /> Paste or upload notes to auto-fill this table
+            </button>
+          ) : (
+            <div className="border border-slate-200 rounded-lg p-4 bg-slate-50/60">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
+                  <Sparkles size={14} className="text-brand-600" /> Auto-fill from notes
+                </p>
+                <button type="button" onClick={() => setShowInput(false)} className="text-slate-400 hover:text-slate-600">
+                  <X size={16} />
+                </button>
+              </div>
+              <textarea
+                rows={4}
+                value={pasteText}
+                onChange={(e) => {
+                  setPasteText(e.target.value);
+                  if (e.target.value) setPickedFile(null);
+                }}
+                placeholder="Meeting notes yahan paste karo..."
+                className="input w-full mb-2"
+                disabled={Boolean(pickedFile)}
+              />
+              <div className="flex items-center gap-3 flex-wrap">
+                <label className="flex items-center gap-1.5 text-sm font-medium text-slate-600 border border-slate-200 bg-white rounded-lg px-3 py-1.5 cursor-pointer hover:bg-slate-50">
+                  <Upload size={14} />
+                  {pickedFile ? pickedFile.name : "Upload PDF / Word"}
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) {
+                        setPickedFile(f);
+                        setPasteText("");
+                      }
+                    }}
+                  />
+                </label>
+                {pickedFile && (
+                  <button type="button" onClick={() => setPickedFile(null)} className="text-xs text-red-500 hover:underline">
+                    Remove file
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleExtract}
+                  disabled={extracting}
+                  className="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60"
+                >
+                  {extracting && <Loader2 size={13} className="animate-spin" />}
+                  Extract items
+                </button>
+              </div>
+              {extractError && <p className="text-xs text-red-500 mt-2">{extractError}</p>}
+              <p className="text-xs text-slate-400 mt-2">
+                Jo topic/naam/date mile wo table mein bhar jayega, baaki blank rahega — aap edit kar sakte ho.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {viewerText !== null && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4" onClick={() => setViewerText(null)}>
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
+                <p className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
+                  <FileText size={14} /> Source text
+                </p>
+                <button onClick={() => setViewerText(null)} className="text-slate-400 hover:text-slate-600">
+                  <X size={16} />
+                </button>
+              </div>
+              <pre className="p-5 overflow-auto text-sm text-slate-700 whitespace-pre-wrap font-sans">{viewerText}</pre>
+            </div>
+          </div>
+        )}
 
         <div className="flex-1 overflow-auto px-6 py-4">
           {loading ? (
