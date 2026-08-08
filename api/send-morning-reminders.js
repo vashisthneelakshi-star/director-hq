@@ -39,6 +39,7 @@ export default async function handler(req, res) {
   }
 
   const emailByOwner = new Map((usersData?.users || []).map((u) => [u.id, u.email]));
+  const nameByOwner = new Map((usersData?.users || []).map((u) => [u.id, u.user_metadata?.full_name || u.email]));
   const noteByOwner = new Map((notes || []).map((n) => [n.owner_id, n.content]));
 
   const byOwner = new Map();
@@ -62,10 +63,11 @@ export default async function handler(req, res) {
 
     const to = emailByOwner.get(ownerId);
     if (!to) continue;
+    const name = nameByOwner.get(ownerId) || "Director HQ";
 
     try {
       await transporter.sendMail({
-        from: `"Director HQ" <${gmailUser}>`,
+        from: `"${name}'s Director HQ Reminder" <${gmailUser}>`,
         to,
         subject: `Your morning reminder — ${fmtDate(today)}`,
         html: `

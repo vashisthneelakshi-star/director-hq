@@ -34,25 +34,34 @@ export default async function handler(req, res) {
 
   const today = new Date().toISOString().slice(0, 10);
 
-  const { data: items, error } = await supabase
-    .from("mom_items")
-    .select("id, topic, assign_to, assign_to_email, date_of_completion, followup_remark, meetings(title)")
-    .lte("date_of_completion", today)
-    .is("reminder_sent_at", null)
-    .not("assign_to_email", "is", null);
+  const [{ data: items, error }, { data: usersData, error: usersErr }] = await Promise.all([
+    supabase
+      .from("mom_items")
+      .select("id, owner_id, topic, assign_to, assign_to_email, date_of_completion, followup_remark, meetings(title)")
+      .lte("date_of_completion", today)
+      .is("reminder_sent_at", null)
+      .not("assign_to_email", "is", null),
+    supabase.auth.admin.listUsers({ perPage: 200 }),
+  ]);
 
-  if (error) {
-    return res.status(500).json({ error: error.message });
+  if (error || usersErr) {
+    return res.status(500).json({ error: (error || usersErr).message });
   }
+
+  const directorById = new Map(
+    (usersData?.users || []).map((u) => [u.id, { name: u.user_metadata?.full_name || u.email, email: u.email }])
+  );
 
   const results = [];
 
   for (const item of items || []) {
     if (!item.assign_to_email) continue;
     const meetingTitle = item.meetings?.title || "Meeting";
+    const director = directorById.get(item.owner_id) || { name: "Director HQ", email: gmailUser };
     try {
       await transporter.sendMail({
-        from: `"Director HQ" <${gmailUser}>`,
+        from: `"${director.name} (via Director HQ)" <${gmailUser}>`,
+        replyTo: director.email,
         to: item.assign_to_email,
         subject: `Follow-up: ${item.topic || "Action item"} — ${meetingTitle}`,
         html: `

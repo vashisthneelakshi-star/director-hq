@@ -31,6 +31,9 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: "Invalid or expired session" });
   }
 
+  const senderName = userData.user.user_metadata?.full_name || userData.user.email;
+  const senderEmail = userData.user.email;
+
   const { to, subject, html, text } = req.body || {};
   if (!to || !subject || (!html && !text)) {
     return res.status(400).json({ error: "Missing to / subject / body" });
@@ -54,7 +57,11 @@ export default async function handler(req, res) {
 
   try {
     await transporter.sendMail({
-      from: `"Director HQ" <${gmailUser}>`,
+      // The email still physically sends through the shared Gmail account
+      // (Gmail won't let us forge the actual From address), but the display
+      // name shows who it's really from, and replies go straight to them.
+      from: `"${senderName} (via Director HQ)" <${gmailUser}>`,
+      replyTo: senderEmail,
       to: recipients.join(","),
       subject,
       text: text || undefined,
