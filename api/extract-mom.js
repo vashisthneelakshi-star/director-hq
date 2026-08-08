@@ -80,11 +80,22 @@ Read the notes below and return a JSON array of action items. For each item incl
 
 Only include an item if there's an identifiable topic/task. Leave assignTo or dateOfCompletion as "" when not stated in the text — never invent a name or date.
 
-Numbered points often have their own numbered sub-points nested under them. When a point has sub-points listed under it:
-- Do NOT create a separate row for the parent/heading line itself — it's just a category label, not its own action item.
-- Instead create one row per sub-point, since those are the actual concrete tasks.
-- Only create a row for the parent line on its own if it has NO sub-points (i.e. it's a standalone task).
-This avoids listing the same work twice (once as a vague heading, once as its real sub-tasks).
+CRITICAL RULE — do not duplicate headings and their sub-points as separate rows:
+Numbered points in these notes are often followed by their own indented/re-numbered sub-points. The top-level number is just a section heading for the sub-points below it, NOT a task itself. When a numbered point is immediately followed by its own list of sub-points, SKIP that heading entirely and output only the sub-points. Only output the top-level point by itself if it has no sub-points under it.
+
+Example input:
+  3. The mission needs to be refined and implemented for readers.
+    1. Defining the mission for readers.
+    2. Conducting a Reader's Understanding Survey.
+  4. Submit daily reports.
+
+Example correct output:
+[
+  {"topic": "Defining the mission for readers", "assignTo": "", "dateOfCompletion": ""},
+  {"topic": "Conducting a Reader's Understanding Survey", "assignTo": "", "dateOfCompletion": ""},
+  {"topic": "Submit daily reports", "assignTo": "", "dateOfCompletion": ""}
+]
+(Note: point 3's heading itself does NOT appear as a row — only its two sub-points do. Point 4 has no sub-points, so it appears as-is.)
 
 Respond with ONLY the JSON array, no other text, no markdown fences.
 
