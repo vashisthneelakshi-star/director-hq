@@ -224,6 +224,12 @@ function MinutesModal({ meeting, onClose }) {
   const [pickedFile, setPickedFile] = useState(null);
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState("");
+  // The source used in the most recent successful extraction — kept separately
+  // from pasteText/pickedFile (which reset after each extraction round) so it
+  // still gets saved when "Save Minutes" is clicked, even after several
+  // upload/paste/manual rounds in the same session.
+  const [pendingSourceFile, setPendingSourceFile] = useState(null);
+  const [pendingSourceText, setPendingSourceText] = useState("");
 
   // What's actually been saved for this meeting (used by the "view source" icon)
   const [savedSourceText, setSavedSourceText] = useState(meeting.mom_source_text || "");
@@ -287,7 +293,18 @@ function MinutesModal({ meeting, onClose }) {
         }));
         return [...existing, ...added].map((row, i) => ({ ...row, sNo: i + 1 }));
       });
-      if (!pickedFile) setPasteText(sourceText);
+      // Reset the input area so it's ready for another round — file, then
+      // paste, then manually adding a row all keep stacking onto the table
+      // instead of the panel getting "stuck" on the previous input.
+      if (pickedFile) {
+        setPendingSourceFile(pickedFile);
+        setPendingSourceText("");
+      } else {
+        setPendingSourceText(sourceText);
+        setPendingSourceFile(null);
+      }
+      setPickedFile(null);
+      setPasteText("");
       setShowInput(false);
     } catch (err) {
       setExtractError(err.message || "Extraction failed");
@@ -322,13 +339,13 @@ function MinutesModal({ meeting, onClose }) {
 
       // Persist whatever source (pasted text or uploaded file) was used this session
       const patch = {};
-      if (pickedFile) {
-        const path = await store.uploadMomSourceFile(pickedFile);
+      if (pendingSourceFile) {
+        const path = await store.uploadMomSourceFile(pendingSourceFile);
         patch.mom_source_file_url = path;
-        patch.mom_source_file_name = pickedFile.name;
+        patch.mom_source_file_name = pendingSourceFile.name;
         patch.mom_source_text = null;
-      } else if (pasteText.trim() && pasteText !== savedSourceText) {
-        patch.mom_source_text = pasteText;
+      } else if (pendingSourceText.trim() && pendingSourceText !== savedSourceText) {
+        patch.mom_source_text = pendingSourceText;
         patch.mom_source_file_url = null;
         patch.mom_source_file_name = null;
       }
@@ -337,7 +354,8 @@ function MinutesModal({ meeting, onClose }) {
         setSavedSourceText(patch.mom_source_text ?? savedSourceText);
         setSavedFilePath(patch.mom_source_file_url ?? savedFilePath);
         setSavedFileName(patch.mom_source_file_name ?? savedFileName);
-        setPickedFile(null);
+        setPendingSourceFile(null);
+        setPendingSourceText("");
       }
 
       setSaveMsg("Minutes save ho gaye ✓");
