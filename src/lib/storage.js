@@ -64,9 +64,7 @@ export const store = {
     if (error) throw error;
   },
 
-  // Uploads a MoM source file (PDF/Word) to private storage and returns the
-  // storage path (saved in meetings.mom_source_file_url — despite the name,
-  // it's a path, not a public URL, since the bucket is private).
+  // Uploads a MoM source file (PDF/Word) to private storage and returns the storage path.
   async uploadMomSourceFile(file) {
     const owner_id = await currentUserId();
     const path = `${owner_id}/${Date.now()}-${file.name}`;
@@ -79,6 +77,58 @@ export const store = {
     const { data, error } = await supabase.storage.from("mom-uploads").createSignedUrl(path, 3600);
     if (error) throw error;
     return data.signedUrl;
+  },
+
+  // Every paste/upload extraction round for a meeting is its own row, so a
+  // meeting can have several sources, all viewable later.
+  async getMomSources(meetingId) {
+    const { data, error } = await supabase
+      .from("mom_sources")
+      .select("*")
+      .eq("meeting_id", meetingId)
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return data;
+  },
+  async addMomSource(meetingId, { type, textContent, filePath, fileName }) {
+    const owner_id = await currentUserId();
+    const { data, error } = await supabase
+      .from("mom_sources")
+      .insert([
+        {
+          meeting_id: meetingId,
+          owner_id,
+          type,
+          text_content: textContent || null,
+          file_path: filePath || null,
+          file_name: fileName || null,
+        },
+      ])
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+  async deleteMomSource(id) {
+    const { error } = await supabase.from("mom_sources").delete().eq("id", id);
+    if (error) throw error;
+  },
+
+  // Shared contacts (name -> email "phone book"), used to auto-fill MoM assignee emails.
+  async getContacts() {
+    const { data, error } = await supabase.from("contacts").select("*").order("name", { ascending: true });
+    if (error) throw error;
+    return data;
+  },
+  async addContact(name, email) {
+    const owner_id = await currentUserId();
+    const { data, error } = await supabase.from("contacts").insert([{ owner_id, name, email }]).select().single();
+    if (error) throw error;
+    return data;
+  },
+  async deleteContact(id) {
+    const { error } = await supabase.from("contacts").delete().eq("id", id);
+    if (error) throw error;
   },
 
   // Minutes of Meeting (per-meeting action item table)

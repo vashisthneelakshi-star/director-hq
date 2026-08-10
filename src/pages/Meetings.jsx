@@ -19,6 +19,7 @@ import {
   Upload,
   Eye,
   FileText,
+  Contact2,
 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { store } from "../lib/storage";
@@ -26,6 +27,7 @@ import { Linkify } from "../lib/linkify";
 import { useAuth } from "../lib/AuthContext";
 import { isAdminEmail } from "../lib/isAdmin";
 import { useDirectors } from "../lib/useDirectors";
+import { useContacts } from "../lib/useContacts";
 import { sendMeetingInviteEmail, sendFollowupReminderEmail } from "../lib/mail";
 import { extractMomItems } from "../lib/momExtract";
 
@@ -210,6 +212,104 @@ function emptyRow(sNo) {
   return { sNo, topic: "", assignTo: "", assignToEmail: "", dateOfCompletion: "", followupRemark: "" };
 }
 
+function ContactsModal({ contacts, onClose, onChanged }) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const addContact = async (e) => {
+    e.preventDefault();
+    if (!name.trim() || !email.trim()) return;
+    setSaving(true);
+    setError("");
+    try {
+      await store.addContact(name.trim(), email.trim());
+      setName("");
+      setEmail("");
+      await onChanged();
+    } catch (err) {
+      setError(err.message || "Could not save contact");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (id) => {
+    try {
+      await store.deleteContact(id);
+      await onChanged();
+    } catch (err) {
+      setError(err.message || "Could not remove contact");
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4" onClick={onClose}>
+      <div
+        className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[80vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 shrink-0">
+          <p className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
+            <Contact2 size={14} /> Phone book — name → email
+          </p>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+            <X size={16} />
+          </button>
+        </div>
+
+        <form onSubmit={addContact} className="px-5 py-3 border-b border-slate-100 shrink-0 flex gap-2 flex-wrap">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Name (jaisa MoM mein likha jaayega)"
+            className="input flex-1 min-w-[140px]"
+          />
+          <input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="email@company.com"
+            type="email"
+            className="input flex-1 min-w-[160px]"
+          />
+          <button
+            type="submit"
+            disabled={saving}
+            className="px-3 py-2 text-sm font-medium rounded-lg bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60"
+          >
+            Add
+          </button>
+        </form>
+        {error && <p className="text-xs text-red-500 px-5 pt-2">{error}</p>}
+
+        <div className="overflow-y-auto flex-1 px-5 py-2">
+          {contacts.length === 0 ? (
+            <p className="text-sm text-slate-400 py-6 text-center">
+              Koi contact nahi hai abhi — naam add karo, agli baar MoM mein wahi naam likhte hi email auto-fill ho
+              jayegi.
+            </p>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {contacts.map((c) => (
+                <li key={c.id} className="flex items-center justify-between py-2 text-sm">
+                  <div className="min-w-0">
+                    <div className="font-medium text-slate-800 truncate">{c.name}</div>
+                    <div className="text-slate-500 truncate">{c.email}</div>
+                  </div>
+                  <button onClick={() => remove(c.id)} className="text-red-500 hover:underline text-xs shrink-0 ml-2">
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MinutesModal({ meeting, onClose }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -217,6 +317,7 @@ function MinutesModal({ meeting, onClose }) {
   const [sendingIdx, setSendingIdx] = useState(null);
   const [rowMsg, setRowMsg] = useState({});
   const [saveMsg, setSaveMsg] = useState("");
+  const { emailFor, contacts, reload: reloadContacts } = useContacts();
 
   // Paste-or-upload auto-extract
   const [showInput, setShowInput] = useState(false);
@@ -224,20 +325,15 @@ function MinutesModal({ meeting, onClose }) {
   const [pickedFile, setPickedFile] = useState(null);
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState("");
-  // The source used in the most recent successful extraction — kept separately
-  // from pasteText/pickedFile (which reset after each extraction round) so it
-  // still gets saved when "Save Minutes" is clicked, even after several
-  // upload/paste/manual rounds in the same session.
-  const [pendingSourceFile, setPendingSourceFile] = useState(null);
-  const [pendingSourceText, setPendingSourceText] = useState("");
 
-  // What's actually been saved for this meeting (used by the "view source" icon)
-  const [savedSourceText, setSavedSourceText] = useState(meeting.mom_source_text || "");
-  const [savedFilePath, setSavedFilePath] = useState(meeting.mom_source_file_url || "");
-  const [savedFileName, setSavedFileName] = useState(meeting.mom_source_file_name || "");
+  // Every extraction round (file or paste) is saved as its own source — a
+  // meeting can have several, all viewable later via the source-list panel.
+  const [sources, setSources] = useState([]);
+  const [showSources, setShowSources] = useState(false);
   const [viewerText, setViewerText] = useState(null);
-  const [viewerLoading, setViewerLoading] = useState(false);
+  const [viewerLoadingId, setViewerLoadingId] = useState(null);
   const [viewerError, setViewerError] = useState("");
+  const [showContacts, setShowContacts] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -256,6 +352,11 @@ function MinutesModal({ meeting, onClose }) {
           : [emptyRow(1)]
       );
       setLoading(false);
+      try {
+        setSources(await store.getMomSources(meeting.id));
+      } catch {
+        // non-fatal — source list just won't show if this fails
+      }
     })();
   }, [meeting.id]);
 
@@ -287,22 +388,26 @@ function MinutesModal({ meeting, onClose }) {
         const added = items.map((it) => ({
           topic: it.topic,
           assignTo: it.assignTo,
-          assignToEmail: "",
+          assignToEmail: emailFor(it.assignTo),
           dateOfCompletion: it.dateOfCompletion,
           followupRemark: "",
         }));
         return [...existing, ...added].map((row, i) => ({ ...row, sNo: i + 1 }));
       });
-      // Reset the input area so it's ready for another round — file, then
-      // paste, then manually adding a row all keep stacking onto the table
-      // instead of the panel getting "stuck" on the previous input.
+
+      // Save this round as its own source right away — a meeting can build up
+      // several sources over time (upload, then paste more later, etc).
+      let newSource;
       if (pickedFile) {
-        setPendingSourceFile(pickedFile);
-        setPendingSourceText("");
+        const path = await store.uploadMomSourceFile(pickedFile);
+        newSource = await store.addMomSource(meeting.id, { type: "file", filePath: path, fileName: pickedFile.name });
       } else {
-        setPendingSourceText(sourceText);
-        setPendingSourceFile(null);
+        newSource = await store.addMomSource(meeting.id, { type: "text", textContent: sourceText });
       }
+      setSources((prev) => [newSource, ...prev]);
+
+      // Reset the input area so it's ready for another round — file, then
+      // paste, then manually adding a row all keep stacking onto the table.
       setPickedFile(null);
       setPasteText("");
       setShowInput(false);
@@ -313,20 +418,20 @@ function MinutesModal({ meeting, onClose }) {
     }
   };
 
-  const viewSource = async () => {
+  const viewSourceItem = async (source) => {
     setViewerError("");
-    if (savedFilePath) {
-      setViewerLoading(true);
+    if (source.type === "file" && source.file_path) {
+      setViewerLoadingId(source.id);
       try {
-        const url = await store.getMomSourceFileUrl(savedFilePath);
+        const url = await store.getMomSourceFileUrl(source.file_path);
         window.open(url, "_blank", "noopener,noreferrer");
       } catch (err) {
         setViewerError(err.message || "File nahi khul payi");
       } finally {
-        setViewerLoading(false);
+        setViewerLoadingId(null);
       }
-    } else if (savedSourceText) {
-      setViewerText(savedSourceText);
+    } else if (source.text_content) {
+      setViewerText(source.text_content);
     }
   };
 
@@ -336,28 +441,6 @@ function MinutesModal({ meeting, onClose }) {
     try {
       const cleaned = rows.filter((r) => r.topic.trim() || r.assignTo.trim());
       await store.saveMomItems(meeting.id, cleaned);
-
-      // Persist whatever source (pasted text or uploaded file) was used this session
-      const patch = {};
-      if (pendingSourceFile) {
-        const path = await store.uploadMomSourceFile(pendingSourceFile);
-        patch.mom_source_file_url = path;
-        patch.mom_source_file_name = pendingSourceFile.name;
-        patch.mom_source_text = null;
-      } else if (pendingSourceText.trim() && pendingSourceText !== savedSourceText) {
-        patch.mom_source_text = pendingSourceText;
-        patch.mom_source_file_url = null;
-        patch.mom_source_file_name = null;
-      }
-      if (Object.keys(patch).length > 0) {
-        await store.updateMeeting(meeting.id, patch);
-        setSavedSourceText(patch.mom_source_text ?? savedSourceText);
-        setSavedFilePath(patch.mom_source_file_url ?? savedFilePath);
-        setSavedFileName(patch.mom_source_file_name ?? savedFileName);
-        setPendingSourceFile(null);
-        setPendingSourceText("");
-      }
-
       setSaveMsg("Minutes save ho gaye ✓");
     } catch (err) {
       setSaveMsg("Error: " + err.message);
@@ -390,17 +473,25 @@ function MinutesModal({ meeting, onClose }) {
           <div>
             <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
               Minutes of Meeting
-              {(savedSourceText || savedFilePath) && (
+              {sources.length > 0 && (
                 <button
                   type="button"
-                  onClick={viewSource}
-                  disabled={viewerLoading}
-                  title={savedFileName ? `View source: ${savedFileName}` : "View pasted source text"}
-                  className="text-slate-400 hover:text-brand-600 disabled:opacity-50"
+                  onClick={() => setShowSources((v) => !v)}
+                  title="View saved sources"
+                  className="text-slate-400 hover:text-brand-600 flex items-center gap-1"
                 >
-                  {viewerLoading ? <Loader2 size={16} className="animate-spin" /> : <Eye size={16} />}
+                  <Eye size={16} />
+                  <span className="text-xs font-medium">{sources.length}</span>
                 </button>
               )}
+              <button
+                type="button"
+                onClick={() => setShowContacts(true)}
+                title="Manage phone book (name → email)"
+                className="text-slate-400 hover:text-brand-600"
+              >
+                <Contact2 size={16} />
+              </button>
             </h2>
             <p className="text-sm text-slate-500">{meeting.title}</p>
             {viewerError && <p className="text-xs text-red-500 mt-1">{viewerError}</p>}
@@ -409,6 +500,33 @@ function MinutesModal({ meeting, onClose }) {
             <X size={18} />
           </button>
         </div>
+
+        {showSources && sources.length > 0 && (
+          <div className="px-6 py-3 border-b border-slate-100 bg-slate-50/60 shrink-0">
+            <p className="text-xs font-medium text-slate-500 mb-2">Saved sources for this meeting</p>
+            <ul className="space-y-1.5 max-h-32 overflow-y-auto">
+              {sources.map((s) => (
+                <li key={s.id} className="flex items-center justify-between text-sm bg-white border border-slate-200 rounded-lg px-3 py-1.5">
+                  <span className="flex items-center gap-1.5 text-slate-600 truncate">
+                    {s.type === "file" ? <FileText size={13} className="shrink-0" /> : <Sparkles size={13} className="shrink-0" />}
+                    <span className="truncate">
+                      {s.type === "file" ? s.file_name : "Pasted text"} ·{" "}
+                      {new Date(s.created_at).toLocaleDateString()}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => viewSourceItem(s)}
+                    disabled={viewerLoadingId === s.id}
+                    className="text-brand-600 hover:underline shrink-0 ml-2 disabled:opacity-50"
+                  >
+                    {viewerLoadingId === s.id ? "..." : "View"}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <div className="px-6 pt-4 shrink-0">
           {!showInput ? (
@@ -496,6 +614,10 @@ function MinutesModal({ meeting, onClose }) {
           </div>
         )}
 
+        {showContacts && (
+          <ContactsModal contacts={contacts} onClose={() => setShowContacts(false)} onChanged={reloadContacts} />
+        )}
+
         <div className="flex-1 overflow-auto px-6 py-4">
           {loading ? (
             <div className="flex justify-center py-12">
@@ -522,7 +644,17 @@ function MinutesModal({ meeting, onClose }) {
                       <textarea rows={2} value={row.topic} onChange={(e) => updateRow(idx, "topic", e.target.value)} className="input w-full" />
                     </td>
                     <td className="py-2 pr-2">
-                      <input value={row.assignTo} onChange={(e) => updateRow(idx, "assignTo", e.target.value)} className="input w-full" />
+                      <input
+                        value={row.assignTo}
+                        onChange={(e) => updateRow(idx, "assignTo", e.target.value)}
+                        onBlur={() => {
+                          if (row.assignTo.trim() && !row.assignToEmail.trim()) {
+                            const found = emailFor(row.assignTo);
+                            if (found) updateRow(idx, "assignToEmail", found);
+                          }
+                        }}
+                        className="input w-full"
+                      />
                     </td>
                     <td className="py-2 pr-2">
                       <input

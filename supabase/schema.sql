@@ -139,11 +139,32 @@ begin
 end $$;
 
 -- MOM (Minutes of Meeting) AUTO-EXTRACT SOURCE
--- Stores the raw pasted text / uploaded source document that a meeting's
--- Minutes-of-Meeting table was auto-extracted from, so it can be viewed later.
-alter table meetings add column if not exists mom_source_text text;
-alter table meetings add column if not exists mom_source_file_url text;
-alter table meetings add column if not exists mom_source_file_name text;
+-- Stores every pasted-text / uploaded-document round that a meeting's
+-- Minutes-of-Meeting table was auto-extracted from, so each one can be
+-- viewed later (not just the most recent — a meeting can have several).
+create table if not exists mom_sources (
+  id uuid primary key default gen_random_uuid(),
+  meeting_id uuid not null references meetings(id) on delete cascade,
+  owner_id uuid not null references auth.users(id) on delete cascade,
+  type text not null check (type in ('text', 'file')),
+  text_content text,
+  file_path text,
+  file_name text,
+  created_at timestamptz not null default now()
+);
+alter table mom_sources enable row level security;
+
+do $$
+begin
+  if not exists (select 1 from pg_policies where tablename = 'mom_sources' and policyname = 'owner_all_mom_sources') then
+    create policy owner_all_mom_sources on mom_sources for all using (auth.uid() = owner_id) with check (auth.uid() = owner_id);
+  end if;
+  if not exists (select 1 from pg_policies where tablename = 'mom_sources' and policyname = 'admin_read_all_mom_sources') then
+    create policy admin_read_all_mom_sources on mom_sources for select using (is_admin());
+  end if;
+end $$;
+
+create index if not exists idx_mom_sources_meeting on mom_sources(meeting_id);
 
 -- Storage bucket for uploaded MoM source files (PDF/Word)
 insert into storage.buckets (id, name, public)
@@ -169,6 +190,35 @@ begin
       using (bucket_id = 'mom-uploads' and is_admin());
   end if;
 end $$;
+
+-- SHARED CONTACTS (name -> email "phone book") so MoM rows can auto-fill an
+-- assignee's email once their name is known, whether or not they're an app user.
+create table if not exists contacts (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  email text not null,
+  created_at timestamptz not null default now()
+);
+alter table contacts enable row level security;
+
+do $$
+begin
+  if not exists (select 1 from pg_policies where tablename = 'contacts' and policyname = 'contacts_select_all') then
+    create policy contacts_select_all on contacts for select using (auth.role() = 'authenticated');
+  end if;
+  if not exists (select 1 from pg_policies where tablename = 'contacts' and policyname = 'contacts_owner_insert') then
+    create policy contacts_owner_insert on contacts for insert with check (auth.uid() = owner_id);
+  end if;
+  if not exists (select 1 from pg_policies where tablename = 'contacts' and policyname = 'contacts_owner_update') then
+    create policy contacts_owner_update on contacts for update using (auth.uid() = owner_id);
+  end if;
+  if not exists (select 1 from pg_policies where tablename = 'contacts' and policyname = 'contacts_owner_delete') then
+    create policy contacts_owner_delete on contacts for delete using (auth.uid() = owner_id);
+  end if;
+end $$;
+
+create index if not exists idx_contacts_name on contacts (lower(name));
 
 -- TASK ASSIGNMENT (who gave the task / who it was forwarded to)
 alter table tasks add column if not exists assignment_type text not null default 'self';
